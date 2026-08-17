@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Matches the palette/type system of the existing Stock Board tool
+   (ryansum.com/stock-board.html) so the two tools feel like one product. */
+:root {
+  --bg: #12161b;
+  --panel: #1b2128;
+  --panel-raised: #232a32;
+  --line: #2c333c;
+  --fg: #eceef1;
+  --muted: #8b94a0;
+  --amber: #f5a623;
+  --amber-dim: #7a551a;
+  --amber-fg: #1a1305;
+  --danger: #e14b4b;
+  --success: #4caf50;
+  --sync: #3fa796;
+  --status-prep: #a66dd4;
+  --status-available: #e1b93b;
+  --status-reserved: #4caf50;
+  --status-sold: #e14b4b;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-amber: var(--amber);
+  --color-amber-dim: var(--amber-dim);
+  --color-amber-fg: var(--amber-fg);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-sync: var(--sync);
+  --color-status-prep: var(--status-prep);
+  --color-status-available: var(--status-available);
+  --color-status-reserved: var(--status-reserved);
+  --color-status-sold: var(--status-sold);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-panel: 10px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

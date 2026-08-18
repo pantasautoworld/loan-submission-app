@@ -234,6 +234,12 @@ export function SubmissionWizard({
             hirerPhone={byRole.hirer?.phone ?? ""}
             guarantor1Relationship={byRole.guarantor1?.relationship_to_hirer ?? ""}
             guarantor2Relationship={byRole.guarantor2?.relationship_to_hirer ?? ""}
+            hirerName={byRole.hirer?.name ?? ""}
+            hirerNric={byRole.hirer?.nric ?? ""}
+            guarantor1Name={byRole.guarantor1?.name ?? ""}
+            guarantor1Nric={byRole.guarantor1?.nric ?? ""}
+            guarantor2Name={byRole.guarantor2?.name ?? ""}
+            guarantor2Nric={byRole.guarantor2?.nric ?? ""}
             onPersonExtracted={updatePersonFields}
             onVehicleExtracted={updateVehicleFields}
           />

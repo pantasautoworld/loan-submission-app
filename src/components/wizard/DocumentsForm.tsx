@@ -35,6 +35,15 @@ interface Props {
   hirerPhone?: string;
   guarantor1Relationship?: string;
   guarantor2Relationship?: string;
+  /** Current saved name/NRIC per role - used to show a persistent warning (not just a
+   * one-time toast) whenever an IC is uploaded but the name or NRIC still ended up
+   * blank, however that happened. */
+  hirerName?: string;
+  hirerNric?: string;
+  guarantor1Name?: string;
+  guarantor1Nric?: string;
+  guarantor2Name?: string;
+  guarantor2Nric?: string;
   /** Called after IC/bill OCR updates a person's fields, so the wizard's in-memory data stays in sync. */
   onPersonExtracted: (role: PersonRole, fields: Record<string, string>) => void;
   /** Called after the VOC scan detects/matches a plate, so the Vehicle tab stays in sync. */
@@ -102,6 +111,12 @@ export function DocumentsForm({
   hirerPhone,
   guarantor1Relationship,
   guarantor2Relationship,
+  hirerName,
+  hirerNric,
+  guarantor1Name,
+  guarantor1Nric,
+  guarantor2Name,
+  guarantor2Nric,
   onPersonExtracted,
   onVehicleExtracted,
 }: Props) {
@@ -270,7 +285,37 @@ export function DocumentsForm({
     }
   }
 
+  const NAME_BY_ROLE: Partial<Record<PersonRole, string | undefined>> = {
+    hirer: hirerName,
+    guarantor1: guarantor1Name,
+    guarantor2: guarantor2Name,
+  };
+  const NRIC_BY_ROLE: Partial<Record<PersonRole, string | undefined>> = {
+    hirer: hirerNric,
+    guarantor1: guarantor1Nric,
+    guarantor2: guarantor2Nric,
+  };
+
+  /**
+   * Derived from the actual saved person data rather than the one-time upload
+   * response, so this keeps showing (surviving re-renders, navigating away and
+   * back, etc.) for as long as an IC is uploaded but its name/NRIC is still
+   * blank - not just in the instant right after the scan runs.
+   */
+  function persistentIcWarning(docType: DocType): string | null {
+    const role = IC_ROLES[docType];
+    if (!role || !uploaded.has(docType)) return null;
+    const name = (NAME_BY_ROLE[role] ?? "").trim();
+    const nric = (NRIC_BY_ROLE[role] ?? "").trim();
+    const tabLabel = IC_TAB_LABELS[docType] ?? "Hirer/Guarantor Info";
+    if (!name && !nric) return `Name & NRIC still missing - please key them in manually at ${tabLabel}.`;
+    if (!nric) return `NRIC still missing - please key it in manually at ${tabLabel}.`;
+    if (!name) return `Name still missing - please key it in manually at ${tabLabel}.`;
+    return null;
+  }
+
   function box(docType: DocType, label: string, opts?: { required?: boolean; hint?: string }) {
+    const warning = scanError[docType] ?? persistentIcWarning(docType);
     return (
       <div>
         <UploadBox
@@ -283,9 +328,7 @@ export function DocumentsForm({
           onSelect={(file) => handleUpload(docType, file)}
           onDelete={() => handleDelete(docType)}
         />
-        {scanError[docType] && (
-          <p className="mt-1 text-xs text-danger">{scanError[docType]}</p>
-        )}
+        {warning && <p className="mt-1 text-xs text-danger">{warning}</p>}
         {docType === "car_voc" && vocNotice && (
           <p className="mt-1 text-xs text-muted">{vocNotice}</p>
         )}

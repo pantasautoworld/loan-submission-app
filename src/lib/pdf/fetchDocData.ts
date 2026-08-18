@@ -2,14 +2,35 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PersonData, SubmissionDocData } from "@/lib/formTemplate";
 import type { PersonRow } from "@/lib/types";
 
+/**
+ * The printed form has two fixed-height rows for an address. Bill OCR returns
+ * the whole address as one joined string, which - left alone - gets crammed
+ * entirely into the first row and its overflow clipped rather than flowing
+ * into the second (empty) row. Splits a long single line near a comma so it
+ * spans both rows instead.
+ */
+const ADDRESS_SPLIT_TARGET = 45;
+
 function splitAddress(address: string, poskod: string, state: string) {
   const trimmed = (address ?? "").trim();
   const lines = trimmed.split(/\r?\n/).filter(Boolean);
   if (lines.length > 1) {
     return { address1: lines[0], address2: lines.slice(1).join(", ") };
   }
-  const line2 = [poskod, state].filter(Boolean).join(" ");
-  return { address1: trimmed, address2: line2 };
+
+  const posState = [poskod, state].filter(Boolean).join(" ");
+  if (trimmed.length <= ADDRESS_SPLIT_TARGET) {
+    return { address1: trimmed, address2: posState };
+  }
+
+  let splitAt = trimmed.lastIndexOf(",", ADDRESS_SPLIT_TARGET);
+  if (splitAt <= 0) splitAt = trimmed.indexOf(",", ADDRESS_SPLIT_TARGET);
+  if (splitAt <= 0) splitAt = trimmed.lastIndexOf(" ", ADDRESS_SPLIT_TARGET);
+  if (splitAt <= 0) return { address1: trimmed, address2: posState };
+
+  const address1 = trimmed.slice(0, splitAt + 1).trim();
+  const rest = trimmed.slice(splitAt + 1).trim();
+  return { address1, address2: posState ? `${rest}, ${posState}` : rest };
 }
 
 function toPersonData(

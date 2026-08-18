@@ -49,6 +49,15 @@ export async function buildWorkbookBuffer(
     ws.getCell(write.cell).value = write.value(doc);
   }
 
+  // The "Adress ##" row (each section's second address line) has no explicit
+  // height in the template, unlike the "House/Residence" row above it - match
+  // it so a longer address split across both rows doesn't get vertically
+  // clipped in the PDF.
+  const pg1 = workbook.getWorksheet("ELK pg1");
+  if (pg1) {
+    for (const row of [21, 28, 36]) pg1.getRow(row).height = 30;
+  }
+
   for (const [role, slots] of Object.entries(SIGNATURE_SLOTS) as [SignerRole, typeof SIGNATURE_SLOTS.hirer][]) {
     const buffer = signatureImages[role];
     if (!buffer) continue;

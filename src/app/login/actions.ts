@@ -22,7 +22,8 @@ export async function login(formData: FormData) {
   let account: StockBoardStaffAccount | null;
   try {
     account = await verifyStockBoardLogin(username, password);
-  } catch {
+  } catch (err) {
+    console.error("[login] verifyStockBoardLogin failed:", err);
     redirect(
       `/login?error=${encodeURIComponent("Could not reach Stock Board to sign in. Try again.")}`
     );
@@ -51,6 +52,7 @@ export async function login(formData: FormData) {
       password,
     });
     if (updateErr) {
+      console.error("[login] updateUserById failed:", updateErr);
       redirect(`/login?error=${encodeURIComponent("Could not sign in. Try again.")}`);
     }
     await admin
@@ -64,6 +66,7 @@ export async function login(formData: FormData) {
       email_confirm: true,
     });
     if (createErr || !created.user) {
+      console.error("[login] createUser failed:", createErr);
       redirect(`/login?error=${encodeURIComponent("Could not create your account. Try again.")}`);
     }
     // A DB trigger (handle_new_user) already inserted a bare {id, full_name} row for
@@ -76,12 +79,14 @@ export async function login(formData: FormData) {
       stockboard_username: account.username,
     });
     if (profileErr) {
+      console.error("[login] profile upsert failed:", profileErr);
       redirect(`/login?error=${encodeURIComponent("Could not set up your account. Try again.")}`);
     }
   }
 
   const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
   if (signInErr) {
+    console.error("[login] signInWithPassword failed:", signInErr);
     redirect(`/login?error=${encodeURIComponent(signInErr.message)}`);
   }
 

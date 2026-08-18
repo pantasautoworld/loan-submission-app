@@ -19,6 +19,8 @@ Requires `.env.local` with:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ANTHROPIC_API_KEY=...   # for IC / electricity bill scanning — https://console.anthropic.com/settings/keys
+TELEGRAM_BOT_TOKEN=...  # optional — Telegram notification when a submission is generated
+TELEGRAM_CHAT_ID=...    # optional — chat/user id the bot sends notifications to
 ```
 
 Staff accounts (username, password, role) are created and managed by an admin from

@@ -3,62 +3,86 @@ import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { initialsOf, avatarColor } from "@/lib/avatar";
 
-const MEDAL_RING = ["ring-amber", "ring-fg/40", "ring-[#cd7f32]"];
-
 interface LeaderboardEntry {
   name: string;
   count: number;
   photoUrl: string | null;
 }
 
-function Avatar({ entry, className }: { entry: LeaderboardEntry; className: string }) {
+function Avatar({
+  entry,
+  className,
+  shape = "circle",
+}: {
+  entry: LeaderboardEntry;
+  className: string;
+  shape?: "circle" | "square";
+}) {
+  const shapeClass = shape === "square" ? "rounded-2xl" : "rounded-full";
   if (entry.photoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- small remote avatar thumbnails don't need next/image's optimization pipeline
       <img
         src={entry.photoUrl}
         alt={entry.name}
-        className={`flex-shrink-0 rounded-full object-cover ${className}`}
+        className={`flex-shrink-0 object-cover ${shapeClass} ${className}`}
       />
     );
   }
   return (
     <div
-      className={`flex flex-shrink-0 items-center justify-center rounded-full font-semibold ${avatarColor(entry.name)} ${className}`}
+      className={`flex flex-shrink-0 items-center justify-center font-bold ${shapeClass} ${avatarColor(entry.name)} ${className}`}
     >
       {initialsOf(entry.name)}
     </div>
   );
 }
 
+const PODIUM_RING = ["ring-amber-300", "ring-slate-200", "ring-orange-300"];
+
 function PodiumSlot({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3 }) {
-  if (!entry) return <div className="w-20 sm:w-24" />;
+  if (!entry) return <div className="w-28 sm:w-32" />;
 
   const isFirst = rank === 1;
-  const avatarSize = isFirst ? "h-20 w-20 text-xl" : "h-16 w-16 text-base";
-  const ringColor = MEDAL_RING[rank - 1];
-  const platformHeight = isFirst ? "h-14" : rank === 2 ? "h-10" : "h-8";
-  const platformColor = isFirst ? "bg-amber/25" : rank === 2 ? "bg-fg/10" : "bg-[#cd7f32]/20";
+  const frameSize = isFirst ? "h-28 w-28 text-4xl" : "h-24 w-24 text-3xl";
+  const ringColor = PODIUM_RING[rank - 1];
 
   return (
-    <div className="flex w-20 flex-col items-center sm:w-24">
-      {isFirst && (
-        <svg viewBox="0 0 24 16" className="mb-1 h-4 w-6">
-          <path
-            d="M2 14 L2 6 L6 10 L12 3 L18 10 L22 6 L22 14 Z"
-            fill="#f5a623"
-            stroke="#0f1115"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-        </svg>
+    <div className={`flex w-28 flex-col items-center sm:w-32 ${isFirst ? "" : "pb-2"}`}>
+      {isFirst ? (
+        <div className="relative mb-1 flex h-10 w-16 items-center justify-center">
+          <span className="absolute h-9 w-9 animate-ping rounded-full bg-amber-300/50" />
+          <svg viewBox="0 0 24 16" className="relative h-10 w-14 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]">
+            <path
+              d="M2 14 L2 6 L6 10 L12 3 L18 10 L22 6 L22 14 Z"
+              fill="#fbbf24"
+              stroke="#78350f"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="absolute -left-1 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+          <span className="absolute -right-1 top-1 h-1 w-1 animate-pulse rounded-full bg-white [animation-delay:300ms]" />
+        </div>
+      ) : (
+        <span className="mb-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-extrabold text-violet-700 shadow">
+          {rank}
+        </span>
       )}
-      <Avatar entry={entry} className={`${avatarSize} ring-2 ${ringColor}`} />
-      <p className="mt-2 w-full truncate text-center text-sm font-medium text-fg">{entry.name}</p>
-      <span className="mt-1 rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-semibold text-amber">
+      <div className="relative">
+        {isFirst && (
+          <span className="absolute inset-0 -z-10 animate-pulse rounded-2xl bg-amber-300/40 blur-xl" />
+        )}
+        <div
+          className={`rounded-2xl bg-white/15 p-1.5 shadow-lg ${isFirst ? "scale-110 animate-[pulse_2.5s_ease-in-out_infinite]" : ""}`}
+        >
+          <Avatar entry={entry} shape="square" className={`${frameSize} ring-4 ${ringColor}`} />
+        </div>
+      </div>
+      <p className="mt-2 w-full truncate text-center text-sm font-bold text-white">{entry.name}</p>
+      <span className="mt-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-bold text-white">
         {entry.count}
       </span>
-      <div className={`mt-3 w-full rounded-t-[6px] ${platformHeight} ${platformColor}`} />
     </div>
   );
 }
@@ -221,43 +245,62 @@ export default async function HomePage() {
           </Link>
         </div>
 
-        <div className="rounded-[10px] border border-line bg-panel p-5">
-          <h2 className="font-medium text-fg">Leaderboard</h2>
-          <p className="mt-0.5 text-sm text-muted">Most cases generated in {monthLabel}.</p>
+        <div className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#6b21a8] via-[#c026d3] to-[#f97316] p-5 shadow-xl">
+          <div className="pointer-events-none absolute -left-10 -top-14 h-44 w-44 animate-pulse rounded-full bg-amber-300/25 blur-2xl" />
+          <div className="pointer-events-none absolute -right-8 -top-4 h-36 w-36 animate-pulse rounded-full bg-cyan-300/25 blur-2xl [animation-delay:500ms]" />
+          <div className="pointer-events-none absolute -bottom-10 left-1/3 h-32 w-32 animate-pulse rounded-full bg-pink-400/20 blur-2xl [animation-delay:1000ms]" />
+          <div className="pointer-events-none absolute -bottom-6 right-6 h-24 w-24 animate-pulse rounded-full bg-yellow-300/20 blur-xl [animation-delay:1500ms]" />
 
-          {leaderboard.length === 0 ? (
-            <p className="mt-4 text-sm text-muted">No cases generated yet this month.</p>
-          ) : (
-            <>
-              <div className="mt-6 flex items-end justify-center gap-4 sm:gap-8">
-                <PodiumSlot entry={second} rank={2} />
-                <PodiumSlot entry={first} rank={1} />
-                <PodiumSlot entry={third} rank={3} />
+          <div className="relative">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-white px-6 py-1.5 shadow-[0_0_20px_rgba(251,191,36,0.6)]">
+                <span className="text-sm font-extrabold uppercase tracking-widest text-violet-700">
+                  Leaderboard
+                </span>
               </div>
+            </div>
+            <p className="mt-2 text-center text-sm text-fuchsia-50">
+              Most cases generated in {monthLabel}.
+            </p>
 
-              {rest.length > 0 && (
-                <ol className="mt-6 space-y-2">
-                  {rest.map((entry, i) => (
-                    <li
-                      key={`${entry.name}-${i}`}
-                      className="flex items-center justify-between rounded-[8px] border border-line bg-panel-raised/40 px-3 py-2"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-xs font-semibold text-muted">
-                          {i + 4}
+            {leaderboard.length === 0 ? (
+              <p className="mt-6 text-center text-sm text-fuchsia-50">
+                No cases generated yet this month.
+              </p>
+            ) : (
+              <>
+                <div className="mt-6 flex items-end justify-center gap-4 sm:gap-8">
+                  <PodiumSlot entry={second} rank={2} />
+                  <PodiumSlot entry={first} rank={1} />
+                  <PodiumSlot entry={third} rank={3} />
+                </div>
+
+                {rest.length > 0 && (
+                  <ol className="mt-6 space-y-2">
+                    {rest.map((entry, i) => (
+                      <li
+                        key={`${entry.name}-${i}`}
+                        className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-3 py-2.5 shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-extrabold text-violet-700">
+                            {i + 4}
+                          </span>
+                          <Avatar entry={entry} className="h-12 w-12 text-base" />
+                          <span className="truncate text-sm font-semibold text-violet-950">
+                            {entry.name}
+                          </span>
+                        </div>
+                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-3 py-1 text-xs font-bold text-white shadow">
+                          {entry.count} {entry.count === 1 ? "case" : "cases"}
                         </span>
-                        <Avatar entry={entry} className="h-8 w-8 text-xs" />
-                        <span className="text-sm font-medium text-fg">{entry.name}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-amber">
-                        {entry.count} {entry.count === 1 ? "case" : "cases"}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </>
-          )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </main>
     </div>

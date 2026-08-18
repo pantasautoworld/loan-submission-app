@@ -115,10 +115,10 @@ function AddStaffForm() {
           <img
             src={photoPreview}
             alt="Preview"
-            className="h-14 w-14 flex-shrink-0 rounded-full object-cover"
+            className="h-24 w-24 flex-shrink-0 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-xs text-muted">
+          <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-xs text-muted">
             No photo
           </div>
         )}
@@ -248,7 +248,7 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
     <div className="rounded-[10px] border border-line bg-panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <RowAvatar name={staff.full_name} photoUrl={staff.photoUrl} className="h-10 w-10 text-sm" />
+          <RowAvatar name={staff.full_name} photoUrl={staff.photoUrl} className="h-16 w-16 text-lg" />
           <div>
             <p className="font-medium text-fg">
               {staff.full_name} {isSelf && <span className="text-xs text-muted">(you)</span>}

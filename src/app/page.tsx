@@ -1,9 +1,100 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
+import { initialsOf, avatarColor } from "@/lib/avatar";
+
+const MEDAL_RING = ["ring-amber", "ring-fg/40", "ring-[#cd7f32]"];
+
+interface LeaderboardEntry {
+  name: string;
+  count: number;
+  photoUrl: string | null;
+}
+
+function Avatar({ entry, className }: { entry: LeaderboardEntry; className: string }) {
+  if (entry.photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- small remote avatar thumbnails don't need next/image's optimization pipeline
+      <img
+        src={entry.photoUrl}
+        alt={entry.name}
+        className={`flex-shrink-0 rounded-full object-cover ${className}`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`flex flex-shrink-0 items-center justify-center rounded-full font-semibold ${avatarColor(entry.name)} ${className}`}
+    >
+      {initialsOf(entry.name)}
+    </div>
+  );
+}
+
+function PodiumSlot({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3 }) {
+  if (!entry) return <div className="w-20 sm:w-24" />;
+
+  const isFirst = rank === 1;
+  const avatarSize = isFirst ? "h-20 w-20 text-xl" : "h-16 w-16 text-base";
+  const ringColor = MEDAL_RING[rank - 1];
+  const platformHeight = isFirst ? "h-14" : rank === 2 ? "h-10" : "h-8";
+  const platformColor = isFirst ? "bg-amber/25" : rank === 2 ? "bg-fg/10" : "bg-[#cd7f32]/20";
+
+  return (
+    <div className="flex w-20 flex-col items-center sm:w-24">
+      {isFirst && (
+        <svg viewBox="0 0 24 16" className="mb-1 h-4 w-6">
+          <path
+            d="M2 14 L2 6 L6 10 L12 3 L18 10 L22 6 L22 14 Z"
+            fill="#f5a623"
+            stroke="#0f1115"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+      <Avatar entry={entry} className={`${avatarSize} ring-2 ${ringColor}`} />
+      <p className="mt-2 w-full truncate text-center text-sm font-medium text-fg">{entry.name}</p>
+      <span className="mt-1 rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-semibold text-amber">
+        {entry.count}
+      </span>
+      <div className={`mt-3 w-full rounded-t-[6px] ${platformHeight} ${platformColor}`} />
+    </div>
+  );
+}
 
 export default async function HomePage() {
-  const { profile } = await requireStaff();
+  const { profile, supabase } = await requireStaff();
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+  const { data: generatedSubs } = await supabase
+    .from("submissions")
+    .select("created_by, profiles:created_by(full_name, avatar_path)")
+    .eq("status", "generated")
+    .gte("created_at", monthStart);
+
+  const counts = new Map<string, LeaderboardEntry>();
+  for (const s of generatedSubs ?? []) {
+    if (!s.created_by) continue;
+    const profileRow = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
+    const row = profileRow as { full_name: string; avatar_path: string | null } | null;
+    const photoUrl = row?.avatar_path
+      ? supabase.storage.from("staff-photos").getPublicUrl(row.avatar_path).data.publicUrl
+      : null;
+    const entry = counts.get(s.created_by) ?? {
+      name: row?.full_name || "Unknown",
+      count: 0,
+      photoUrl,
+    };
+    entry.count += 1;
+    counts.set(s.created_by, entry);
+  }
+  const leaderboard = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+  const [first, second, third] = leaderboard;
+  const rest = leaderboard.slice(3);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -128,6 +219,45 @@ export default async function HomePage() {
               View past submissions and download generated PDFs.
             </p>
           </Link>
+        </div>
+
+        <div className="rounded-[10px] border border-line bg-panel p-5">
+          <h2 className="font-medium text-fg">Leaderboard</h2>
+          <p className="mt-0.5 text-sm text-muted">Most cases generated in {monthLabel}.</p>
+
+          {leaderboard.length === 0 ? (
+            <p className="mt-4 text-sm text-muted">No cases generated yet this month.</p>
+          ) : (
+            <>
+              <div className="mt-6 flex items-end justify-center gap-4 sm:gap-8">
+                <PodiumSlot entry={second} rank={2} />
+                <PodiumSlot entry={first} rank={1} />
+                <PodiumSlot entry={third} rank={3} />
+              </div>
+
+              {rest.length > 0 && (
+                <ol className="mt-6 space-y-2">
+                  {rest.map((entry, i) => (
+                    <li
+                      key={`${entry.name}-${i}`}
+                      className="flex items-center justify-between rounded-[8px] border border-line bg-panel-raised/40 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-xs font-semibold text-muted">
+                          {i + 4}
+                        </span>
+                        <Avatar entry={entry} className="h-8 w-8 text-xs" />
+                        <span className="text-sm font-medium text-fg">{entry.name}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-amber">
+                        {entry.count} {entry.count === 1 ? "case" : "cases"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
         </div>
       </main>
     </div>

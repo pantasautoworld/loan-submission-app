@@ -1,23 +1,49 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createStaff,
   deleteStaff,
   resetStaffPassword,
+  updateStaffPhoto,
   updateStaffRole,
 } from "@/app/staff/actions";
+import { uploadStaffPhoto } from "@/lib/storage";
+import { initialsOf, avatarColor } from "@/lib/avatar";
 
 interface StaffRow {
   id: string;
   full_name: string;
   username: string | null;
   role: "admin" | "sales" | string;
+  photoUrl: string | null;
 }
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber";
 const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted";
+
+function RowAvatar({
+  name,
+  photoUrl,
+  className,
+}: {
+  name: string;
+  photoUrl: string | null;
+  className: string;
+}) {
+  if (photoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element -- small remote avatar thumbnail
+    return <img src={photoUrl} alt={name} className={`rounded-full object-cover ${className}`} />;
+  }
+  return (
+    <div
+      className={`flex items-center justify-center rounded-full font-semibold ${avatarColor(name)} ${className}`}
+    >
+      {initialsOf(name)}
+    </div>
+  );
+}
 
 export function StaffManager({
   staff,
@@ -44,19 +70,33 @@ function AddStaffForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "sales">("sales");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handlePhotoSelect(file: File | undefined) {
+    setPhotoFile(file ?? null);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
       try {
-        await createStaff({ full_name: fullName, username, password, role });
+        let avatar_path: string | undefined;
+        if (photoFile) {
+          avatar_path = await uploadStaffPhoto(`pending-${crypto.randomUUID()}`, photoFile);
+        }
+        await createStaff({ full_name: fullName, username, password, role, avatar_path });
         setFullName("");
         setUsername("");
         setPassword("");
         setRole("sales");
+        handlePhotoSelect(undefined);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not add staff.");
       }
@@ -69,6 +109,30 @@ function AddStaffForm() {
       className="space-y-3 rounded-[10px] border border-line bg-panel-raised/40 p-4"
     >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add Staff</p>
+      <div className="flex items-center gap-3">
+        {photoPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+          <img
+            src={photoPreview}
+            alt="Preview"
+            className="h-14 w-14 flex-shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-panel-raised text-xs text-muted">
+            No photo
+          </div>
+        )}
+        <div>
+          <label className={LABEL}>Photo (optional)</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handlePhotoSelect(e.target.files?.[0])}
+            className="text-xs text-muted file:mr-2 file:rounded-[6px] file:border file:border-line file:bg-panel-raised file:px-2 file:py-1 file:text-xs file:text-fg"
+          />
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className={LABEL}>Full Name</label>
@@ -143,6 +207,19 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
     });
   }
 
+  function handlePhotoChange(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const path = await uploadStaffPhoto(staff.id, file);
+        await updateStaffPhoto(staff.id, path);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not update photo.");
+      }
+    });
+  }
+
   function handleRoleChange(role: "admin" | "sales") {
     setError(null);
     startTransition(async () => {
@@ -170,11 +247,14 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
   return (
     <div className="rounded-[10px] border border-line bg-panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-medium text-fg">
-            {staff.full_name} {isSelf && <span className="text-xs text-muted">(you)</span>}
-          </p>
-          <p className="text-xs text-muted">@{staff.username ?? "-"}</p>
+        <div className="flex items-center gap-3">
+          <RowAvatar name={staff.full_name} photoUrl={staff.photoUrl} className="h-10 w-10 text-sm" />
+          <div>
+            <p className="font-medium text-fg">
+              {staff.full_name} {isSelf && <span className="text-xs text-muted">(you)</span>}
+            </p>
+            <p className="text-xs text-muted">@{staff.username ?? "-"}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -186,6 +266,16 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
             <option value="sales">Sales</option>
             <option value="admin">Admin</option>
           </select>
+          <label className="cursor-pointer text-xs text-amber hover:underline">
+            {staff.photoUrl ? "Change photo" : "Add photo"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={isPending}
+              className="hidden"
+              onChange={(e) => handlePhotoChange(e.target.files?.[0])}
+            />
+          </label>
           <button
             onClick={() => setShowReset((v) => !v)}
             className="text-xs text-amber hover:underline"

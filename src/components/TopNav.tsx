@@ -1,11 +1,6 @@
 import Link from "next/link";
 import { logout } from "@/app/login/actions";
-
-function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-}
+import { initialsOf } from "@/lib/avatar";
 
 interface Props {
   staffName: string;

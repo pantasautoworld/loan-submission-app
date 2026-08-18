@@ -15,6 +15,7 @@ export async function createStaff(fields: {
   username: string;
   password: string;
   role: "admin" | "sales";
+  avatar_path?: string;
 }) {
   await requireAdmin();
   const admin = createAdminClient();
@@ -48,6 +49,7 @@ export async function createStaff(fields: {
     full_name: fields.full_name.trim(),
     role: fields.role,
     username,
+    avatar_path: fields.avatar_path ?? null,
   });
   if (profileErr) {
     await admin.auth.admin.deleteUser(created.user.id);
@@ -66,6 +68,17 @@ export async function resetStaffPassword(profileId: string, newPassword: string)
   const { error } = await admin.auth.admin.updateUserById(profileId, { password: newPassword });
   if (error) throw new Error("Could not reset the password.");
   revalidatePath("/staff");
+}
+
+export async function updateStaffPhoto(profileId: string, avatarPath: string) {
+  const { supabase } = await requireAdmin();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_path: avatarPath })
+    .eq("id", profileId);
+  if (error) throw new Error("Could not update the photo.");
+  revalidatePath("/staff");
+  revalidatePath("/");
 }
 
 export async function updateStaffRole(profileId: string, role: "admin" | "sales") {

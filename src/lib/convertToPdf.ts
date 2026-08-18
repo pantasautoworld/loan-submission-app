@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,9 +34,24 @@ export async function convertXlsxToPdf(xlsxBuffer: Buffer): Promise<Buffer> {
     await writeFile(inputPath, xlsxBuffer);
 
     const binary = resolveSofficeBinary();
+    // The container runs as a non-root user with no writable home directory (HOME
+    // resolves to /nonexistent), so LibreOffice can't create its user profile there
+    // and fails with "User installation could not be completed". Point it at our
+    // own known-writable temp dir instead of relying on $HOME - cleaned up below
+    // along with the rest of `dir`.
+    const profileDir = join(dir, "soffice-profile");
     await execFileAsync(
       binary,
-      ["--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, inputPath],
+      [
+        "--headless",
+        "--norestore",
+        `-env:UserInstallation=${pathToFileURL(profileDir).href}`,
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        dir,
+        inputPath,
+      ],
       { timeout: 60_000 }
     );
 

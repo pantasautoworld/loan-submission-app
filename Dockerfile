@@ -34,7 +34,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV LIBREOFFICE_BIN=/usr/bin/soffice
 
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+# --system users get HOME=/nonexistent by default on Debian, which broke LibreOffice
+# (it needs a writable home to create its user profile) - give this user a real one.
+# convertToPdf.ts also points LibreOffice at its own temp dir directly as a second
+# layer of defense, independent of $HOME.
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 --home /home/nextjs --shell /bin/false nextjs \
+    && mkdir -p /home/nextjs \
+    && chown nextjs:nodejs /home/nextjs
+ENV HOME=/home/nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

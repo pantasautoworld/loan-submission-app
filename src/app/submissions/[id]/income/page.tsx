@@ -25,7 +25,11 @@ export default async function IncomeDocumentsPage({
 
   return (
     <div className="flex flex-1 flex-col">
-      <TopNav staffName={profile.full_name} breadcrumb={["Submissions", "Income Documents"]} />
+      <TopNav
+        staffName={profile.full_name}
+        role={profile.role}
+        breadcrumb={["Submissions", "Income Documents"]}
+      />
       <main className="mx-auto w-full max-w-5xl flex-1 p-6">
         {submission.status !== "generated" ? (
           <div className="space-y-3 rounded-[10px] border border-line bg-panel p-6">

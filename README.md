@@ -21,8 +21,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ANTHROPIC_API_KEY=...   # for IC / electricity bill scanning — https://console.anthropic.com/settings/keys
 ```
 
-Staff accounts are created by an admin via the Supabase dashboard (Authentication →
-Users → Invite), not self-signup.
+Staff accounts (username, password, role) are created and managed by an admin from
+within the app itself, under "Manage Staff" (`/staff`, admin-only) - not self-signup.
+Login is entirely local to this app (a username/password checked against Supabase
+Auth); it does not depend on any other system.
 
 ### PDF generation locally
 

@@ -22,7 +22,11 @@ export default async function EditSubmissionPage({
 
   return (
     <div className="flex flex-1 flex-col">
-      <TopNav staffName={profile.full_name} breadcrumb={["Submissions", "Create New Application"]} />
+      <TopNav
+        staffName={profile.full_name}
+        role={profile.role}
+        breadcrumb={["Submissions", "Create New Application"]}
+      />
       <main className="mx-auto w-full max-w-5xl flex-1 p-6">
         <SubmissionWizard
           submission={submission as SubmissionRow}

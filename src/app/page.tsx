@@ -7,7 +7,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <TopNav staffName={profile.full_name} />
+      <TopNav staffName={profile.full_name} role={profile.role} />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
         <h1 className="font-display text-xl text-fg">Welcome, {profile.full_name || "there"}</h1>
         <div className="grid gap-4 sm:grid-cols-2">

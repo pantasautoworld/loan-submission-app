@@ -9,11 +9,13 @@ function initialsOf(name: string) {
 
 interface Props {
   staffName: string;
+  /** Shows the "Manage Staff" link when "admin". */
+  role?: string;
   /** Breadcrumb trail after "Applications", e.g. ["New Submission"]. */
   breadcrumb?: string[];
 }
 
-export function TopNav({ staffName, breadcrumb = [] }: Props) {
+export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-panel">
       <div className="flex items-center justify-between px-6 py-3">
@@ -61,6 +63,11 @@ export function TopNav({ staffName, breadcrumb = [] }: Props) {
         <Link href="/submissions/new" className="hover:text-amber">
           New Submission
         </Link>
+        {role === "admin" && (
+          <Link href="/staff" className="hover:text-amber">
+            Manage Staff
+          </Link>
+        )}
       </div>
     </header>
   );

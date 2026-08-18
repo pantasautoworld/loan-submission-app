@@ -27,7 +27,7 @@ export default async function LoginPage({
 
         <div className="text-center">
           <h1 className="text-lg font-semibold text-fg">Pantas Autoworld</h1>
-          <p className="text-sm text-muted">Sign in with your Stock Board username</p>
+          <p className="text-sm text-muted">Sign in to your staff account</p>
         </div>
 
         {error && (
@@ -78,7 +78,7 @@ export default async function LoginPage({
         </button>
 
         <p className="text-xs leading-relaxed text-muted">
-          No account? Ask an admin to add you as a Stock Board staff login.
+          No account? Ask an admin to add you under Manage Staff.
         </p>
       </form>
     </div>

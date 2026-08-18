@@ -16,7 +16,7 @@ export default async function SubmissionsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <TopNav staffName={profile.full_name} breadcrumb={["Submissions"]} />
+      <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Submissions"]} />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-xl text-fg">Submissions</h1>
@@ -67,7 +67,11 @@ export default async function SubmissionsPage() {
                     <td className="px-3 py-2 text-fg">{staff ?? "-"}</td>
                     <td className="px-3 py-2 capitalize text-fg">{s.status}</td>
                     <td className="px-3 py-2 font-mono text-fg">
-                      {new Date(s.created_at).toLocaleDateString()}
+                      {new Date(s.created_at).toLocaleDateString()}{" "}
+                      {new Date(s.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-3">

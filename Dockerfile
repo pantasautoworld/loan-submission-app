@@ -19,6 +19,14 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* vars are inlined into the client bundle by `next build`, so they
+# must be real env vars during this RUN step. Docker isolates builds from the host
+# env by design - Railway only injects service variables here if the Dockerfile
+# opts in with ARG (see docs.railway.com/builds/dockerfiles#using-variables-at-build-time).
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 RUN npm run build
 
 FROM base AS runner

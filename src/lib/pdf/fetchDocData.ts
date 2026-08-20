@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PersonData, SubmissionDocData } from "@/lib/formTemplate";
 import type { PersonRow } from "@/lib/types";
+import { MALAYSIA_TZ } from "@/lib/timezone";
 
 /**
  * The printed form has two fixed-height rows for an address. Bill OCR returns
@@ -97,9 +98,14 @@ export async function fetchSubmissionDocData(
 
   const guarantor2Present = !!byRole.guarantor2;
 
-  // Match the original file's date style, e.g. 7/08/2026
-  const now = new Date();
-  const date = `${now.getDate()}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  // Match the original file's date style, e.g. 7/08/2026 - formatted explicitly
+  // in Malaysia time since the server (Railway) itself runs in UTC.
+  const date = new Date().toLocaleDateString("en-GB", {
+    timeZone: MALAYSIA_TZ,
+    day: "numeric",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   // Guarantors never get their own printed address - the form just prints "SAME AS
   // HIRER" in that field (see PersonForm's locked address box), matching how staff

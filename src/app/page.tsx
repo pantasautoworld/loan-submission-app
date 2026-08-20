@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { initialsOf, avatarColor } from "@/lib/avatar";
+import { malaysiaDateParts, malaysiaMonthStartIso } from "@/lib/timezone";
 
 interface LeaderboardEntry {
   name: string;
@@ -90,9 +91,15 @@ function PodiumSlot({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
 export default async function HomePage() {
   const { profile, supabase } = await requireStaff();
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  // Computed in Malaysia time (not the server's own UTC) so "this month" matches
+  // what staff actually mean, especially near a day/month boundary.
+  const { year: myYear, month: myMonth } = malaysiaDateParts();
+  const monthStart = malaysiaMonthStartIso(myYear, myMonth);
+  const monthLabel = new Date(Date.UTC(myYear, myMonth - 1, 1)).toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
   const { data: generatedSubs } = await supabase
     .from("submissions")

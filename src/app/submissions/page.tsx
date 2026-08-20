@@ -3,6 +3,23 @@ import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { DownloadLink } from "@/components/DownloadLink";
 import { DeleteSubmissionButton } from "@/components/DeleteSubmissionButton";
+import { MALAYSIA_TZ } from "@/lib/timezone";
+
+/**
+ * This page renders server-side, where the host's system timezone (UTC on
+ * Railway) isn't Malaysia's - format explicitly so "Created" always shows
+ * Malaysia time regardless of where the server runs.
+ */
+function formatMalaysiaDateTime(iso: string): string {
+  const date = new Date(iso);
+  const datePart = date.toLocaleDateString("en-MY", { timeZone: MALAYSIA_TZ });
+  const timePart = date.toLocaleTimeString("en-MY", {
+    timeZone: MALAYSIA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${datePart} ${timePart}`;
+}
 
 export default async function SubmissionsPage() {
   const { profile, supabase } = await requireStaff();
@@ -67,11 +84,7 @@ export default async function SubmissionsPage() {
                     <td className="px-3 py-2 text-fg">{staff ?? "-"}</td>
                     <td className="px-3 py-2 capitalize text-fg">{s.status}</td>
                     <td className="px-3 py-2 font-mono text-fg">
-                      {new Date(s.created_at).toLocaleDateString()}{" "}
-                      {new Date(s.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatMalaysiaDateTime(s.created_at)}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-3">

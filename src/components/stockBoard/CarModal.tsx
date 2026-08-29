@@ -5,6 +5,8 @@ import { compressImage } from "@/lib/compressImage";
 import {
   deletePhoto,
   fetchPhoto,
+  findById,
+  refreshStockBoardVehicles,
   saveVehicle,
   setPhoto,
   type SaveVehicleInput,
@@ -61,6 +63,32 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
       .then(setPhotoUrl)
       .catch(() => setPhotoUrl(null))
       .finally(() => setPhotoLoading(false));
+  }, [vehicle]);
+
+  // The `vehicle` prop is a snapshot from the list's last poll (up to 8s stale, or
+  // older still if this car changed - e.g. via the Telegram approval webhook - while
+  // this modal happened to be open). Re-fetch the live record on open so Save can't
+  // clobber a field someone else just changed with what this snapshot still shows.
+  useEffect(() => {
+    if (!vehicle) return;
+    refreshStockBoardVehicles()
+      .then((list) => {
+        const fresh = findById(vehicle.id, list);
+        if (!fresh) return;
+        setVehicleText(fresh.vehicle);
+        setVin(fresh.vin);
+        setPrice(fresh.price);
+        setCost(fresh.cost);
+        setDeposit(fresh.deposit);
+        setTahun(fresh.tahun);
+        setStatus(fresh.status);
+        setNotes(fresh.notes);
+        setSubmittedBy(fresh.submittedBy ?? "");
+        setSubmissionDate(fresh.submissionDate ?? "");
+        setApprovalDate(fresh.approvalDate ?? "");
+        setSoldDate(fresh.soldDate ?? "");
+      })
+      .catch(() => {}); // best-effort - fall back to the snapshot already shown
   }, [vehicle]);
 
   function handleStatusChange(next: StockBoardVehicle["status"]) {

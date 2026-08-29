@@ -268,6 +268,11 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
                     >
                       {STATUS_LABEL[v.status] ?? v.status}
                     </span>
+                    {v.company && (
+                      <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted">
+                        {v.company}
+                      </span>
+                    )}
                     {aging && (
                       <span className={`rounded-full border px-2.5 py-0.5 font-mono text-[11px] ${AGING_CLASS[aging.level]}`}>
                         Approved {fmtDateShort(v.approvalDate)} · {aging.text}

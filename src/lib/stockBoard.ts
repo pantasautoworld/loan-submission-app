@@ -29,6 +29,8 @@ export interface StockBoardVehicle {
   notes: string;
   cost: string;
   deposit: string;
+  /** Financing company for this loan, e.g. "ELK-DESA" - shown next to the status tag. */
+  company?: string;
   addedBy?: string;
   addedAt?: string;
   updatedBy?: string;
@@ -57,6 +59,7 @@ export interface SaveVehicleInput {
   tahun: string;
   status: StockBoardVehicle["status"];
   notes: string;
+  company: string;
   submittedBy?: string;
   submissionDate?: string;
   approvalDate?: string;

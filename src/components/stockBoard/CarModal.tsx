@@ -43,6 +43,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
   const [tahun, setTahun] = useState(vehicle?.tahun ?? "");
   const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? "prep");
   const [notes, setNotes] = useState(vehicle?.notes ?? "");
+  const [company, setCompany] = useState(vehicle?.company ?? "");
   const [submittedBy, setSubmittedBy] = useState(vehicle?.submittedBy ?? "");
   const [submissionDate, setSubmissionDate] = useState(vehicle?.submissionDate ?? "");
   const [approvalDate, setApprovalDate] = useState(vehicle?.approvalDate ?? "");
@@ -83,6 +84,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
         setTahun(fresh.tahun);
         setStatus(fresh.status);
         setNotes(fresh.notes);
+        setCompany(fresh.company ?? "");
         setSubmittedBy(fresh.submittedBy ?? "");
         setSubmissionDate(fresh.submissionDate ?? "");
         setApprovalDate(fresh.approvalDate ?? "");
@@ -137,6 +139,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
         tahun,
         status,
         notes: notes.trim(),
+        company: company.trim(),
       };
       if (status === "prep" || status === "reserved" || status === "sold") {
         input.submittedBy = submittedBy;
@@ -227,6 +230,14 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
 
         <label className={LABEL}>Tahun</label>
         <input type="number" className={FIELD} value={tahun} onChange={(e) => setTahun(e.target.value)} />
+
+        <label className={LABEL}>Company</label>
+        <input
+          className={FIELD}
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          placeholder="e.g. ELK-DESA"
+        />
 
         <label className={LABEL}>Status</label>
         <select

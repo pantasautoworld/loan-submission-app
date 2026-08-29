@@ -49,18 +49,17 @@ export async function markSubmitted(submissionId: string) {
 }
 
 /**
- * Admin-only: reverses an accidental "Submitted" click. Clears both
- * submitted_at and ticket_no, so the submission goes back to pending and the
- * ticket number it briefly held is never reused (matches how a deleted
- * submission's number is never reused) - the next real Submitted click, on
- * this row or any other, gets a fresh number from the trigger.
+ * Admin-only: reverses an accidental "Submitted" click. Clears submitted_at;
+ * the release_submission_ticket_no trigger branch clears ticket_no and, if
+ * no newer submission has taken a later number since, decrements the
+ * year-month counter so the number is reused rather than wasted.
  */
 export async function undoSubmitted(submissionId: string) {
   const { supabase } = await requireAdmin();
 
   const { error } = await supabase
     .from("submissions")
-    .update({ submitted_at: null, ticket_no: null })
+    .update({ submitted_at: null })
     .eq("id", submissionId)
     .not("submitted_at", "is", null);
   if (error) throw new Error(error.message);

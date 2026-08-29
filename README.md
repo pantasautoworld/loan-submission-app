@@ -108,9 +108,12 @@ Railway are all straightforward:
   trigger only fires on the `NULL -> NOT NULL` transition of `submitted_at`, so
   regenerating the packet afterwards never reassigns a number. Deleted submissions'
   numbers are never reused. An admin can click **Undo** next to a submitted row to
-  reverse an accidental click - this clears both `submitted_at` and `ticket_no`, so
-  the number it briefly held is likewise never reused; the next real Submitted click
-  gets a fresh one from the trigger.
+  reverse an accidental click - the same trigger function's other branch (on the
+  `NOT NULL -> NULL` transition) clears `ticket_no` and decrements the year-month
+  counter, so the number is reused by the next Submitted click rather than wasted -
+  as long as no other submission has taken a later number in the meantime, in which
+  case the decrement is skipped (to avoid colliding with that later number) and the
+  undone number is simply skipped.
 - **Telegram notifications**: staff creating/generating a submission does not notify
   Telegram - only the admin's Submitted click does (`markSubmitted` in
   `src/app/submissions/actions.ts`), guarded by the same `submitted_at IS NULL` check

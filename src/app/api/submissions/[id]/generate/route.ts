@@ -5,6 +5,7 @@ import { buildWorkbookBuffer } from "@/lib/pdf/buildWorkbook";
 import { convertXlsxToPdf } from "@/lib/convertToPdf";
 import { mergePdfPacketWithAttachments, type Attachment } from "@/lib/pdf/mergeDocuments";
 import { withTimeout } from "@/lib/withTimeout";
+import { notifyTelegram } from "@/lib/telegram";
 import type { SignerRole } from "@/lib/formTemplate";
 import type { DocType, DocumentRow } from "@/lib/types";
 
@@ -135,7 +136,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     if (insertError) throw new Error(insertError.message);
 
+    // Only the first generation should notify Telegram - a later regenerate (e.g.
+    // after fixing a document) already has status "generated" going in, so this
+    // stays a one-time "packet generated" ping rather than firing on every retry.
+    const { data: beforeGenerate } = await supabase
+      .from("submissions")
+      .select("status")
+      .eq("id", submissionId)
+      .single();
+    const alreadyGenerated = beforeGenerate?.status === "generated";
+
     await supabase.from("submissions").update({ status: "generated" }).eq("id", submissionId);
+
+    if (!alreadyGenerated) {
+      void notifyTelegram(
+        `📄 <b>Submission generated</b>\n` +
+          `Hirer: ${doc.hirer.name || "-"}\n` +
+          `Vehicle: ${doc.vehicle.plateNo || "-"} ${doc.vehicle.model || ""}`.trim()
+      );
+    }
 
     return NextResponse.json({ pdf_path: pdfPath });
   } catch (err) {

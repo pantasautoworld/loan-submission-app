@@ -114,7 +114,11 @@ Railway are all straightforward:
   as long as no other submission has taken a later number in the meantime, in which
   case the decrement is skipped (to avoid colliding with that later number) and the
   undone number is simply skipped.
-- **Telegram notifications**: staff creating/generating a submission does not notify
-  Telegram - only the admin's Submitted click does (`markSubmitted` in
-  `src/app/submissions/actions.ts`), guarded by the same `submitted_at IS NULL` check
-  so a regenerate or double-click never sends a duplicate message.
+- **Telegram notifications**: two separate one-time pings, each guarded against
+  repeats. The first packet generation (`POST /api/submissions/[id]/generate`)
+  notifies once the moment `status` first becomes `"generated"` - checked by
+  reading the row's status immediately before that update, so a later regenerate
+  (already `"generated"` going in) doesn't re-notify. The admin's Submitted click
+  (`markSubmitted` in `src/app/submissions/actions.ts`) separately notifies once
+  more, guarded by the same `submitted_at IS NULL` check so a regenerate or
+  double-click never sends a duplicate message there either.

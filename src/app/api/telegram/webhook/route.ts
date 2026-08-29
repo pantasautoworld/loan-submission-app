@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { markLoanApproved } from "@/lib/stockBoard";
-import { sendTelegramMessage, telegramChatAllowlist } from "@/lib/telegram";
+import { notifyTelegram, sendTelegramMessage, telegramChatAllowlist } from "@/lib/telegram";
 
 // Every real approval note already starts "RM<deposit> ELK-DESA <PLATE> <name>..."
 // (both with and without a dash before the name) - anchoring on "ELK-DESA" doubles
@@ -50,9 +50,12 @@ export async function POST(request: Request) {
   try {
     const result = await markLoanApproved(plate, text, actorName);
     if (result.ok) {
-      await sendTelegramMessage(
-        String(chatId),
-        `✅ Updated <b>${result.vehicle.vehicle}</b> (${result.vehicle.vin}) → Loan Approved. Notes updated.`
+      // Broadcast to every staff chat (same audience as notifyTelegram's other
+      // notifications) - not just the one who pasted it, so the whole team sees
+      // the car moved to Loan Approved.
+      await notifyTelegram(
+        `✅ <b>${result.vehicle.vehicle}</b> (${result.vehicle.vin}) → Loan Approved.\n` +
+          `Updated by ${actorName}. Notes updated.`
       );
     } else {
       await sendTelegramMessage(String(chatId), `⚠️ ${result.reason}`);

@@ -20,3 +20,9 @@ export function malaysiaDateParts(date: Date = new Date()): {
 export function malaysiaMonthStartIso(year: number, month: number): string {
   return new Date(Date.UTC(year, month - 1, 1) - 8 * 60 * 60 * 1000).toISOString();
 }
+
+/** Today's date in Malaysia as "YYYY-MM-DD", for defaulting a `type="date"` input. */
+export function malaysiaTodayIso(date: Date = new Date()): string {
+  const { year, month, day } = malaysiaDateParts(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}

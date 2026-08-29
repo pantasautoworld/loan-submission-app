@@ -135,7 +135,7 @@ export default async function HomePage() {
       <TopNav staffName={profile.full_name} role={profile.role} />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
         <h1 className="font-display text-xl text-fg">Welcome, {profile.full_name || "there"}</h1>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/submissions/new"
             className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
@@ -251,6 +251,56 @@ export default async function HomePage() {
             <h2 className="font-medium text-fg">Submissions</h2>
             <p className="mt-1 text-sm text-muted">
               View past submissions and download generated PDFs.
+            </p>
+          </Link>
+          <Link
+            href="/stock-board"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-available/15 transition-colors group-hover:bg-status-available/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <path
+                  d="M9 22c1-4 4-7 8-7h10c4 0 7 3 8 7l3 1a3 3 0 0 1 2 3v5a2 2 0 0 1-2 2h-2"
+                  fill="none"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6 33v-4a3 3 0 0 1 3-3h30a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"
+                  fill="#F5A623"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 26c0-4 3-8 7-8h10c4 0 7 4 7 8"
+                  fill="#bfe6fa"
+                  stroke="#0f1115"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+                <line x1="24" y1="18" x2="24" y2="26" stroke="#0f1115" strokeWidth="1.8" />
+                <circle cx="14" cy="35" r="4.5" fill="#2c333c" stroke="#0f1115" strokeWidth="2.2" />
+                <circle cx="14" cy="35" r="1.6" fill="#eceef1" />
+                <circle cx="34" cy="35" r="4.5" fill="#2c333c" stroke="#0f1115" strokeWidth="2.2" />
+                <circle cx="34" cy="35" r="1.6" fill="#eceef1" />
+                <rect
+                  x="18"
+                  y="27.5"
+                  width="12"
+                  height="4.5"
+                  rx="1"
+                  fill="#F2F1EC"
+                  stroke="#0f1115"
+                  strokeWidth="1.4"
+                />
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Stock Board</h2>
+            <p className="mt-1 text-sm text-muted">
+              Browse and manage vehicle inventory.
             </p>
           </Link>
         </div>

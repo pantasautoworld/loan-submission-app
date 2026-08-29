@@ -3,6 +3,8 @@ import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { DownloadLink } from "@/components/DownloadLink";
 import { DeleteSubmissionButton } from "@/components/DeleteSubmissionButton";
+import { SubmitButton } from "@/components/SubmitButton";
+import { UndoSubmitButton } from "@/components/UndoSubmitButton";
 import { MALAYSIA_TZ } from "@/lib/timezone";
 
 /**
@@ -27,7 +29,7 @@ export default async function SubmissionsPage() {
   const { data: submissions } = await supabase
     .from("submissions")
     .select(
-      "id, status, no_plate, model, created_at, created_by, profiles:created_by(full_name), persons(role, name), generated_documents(pdf_path, generated_at, kind)"
+      "id, ticket_no, status, submitted_at, no_plate, model, created_at, created_by, profiles:created_by(full_name), persons(role, name), generated_documents(pdf_path, generated_at, kind)"
     )
     .order("created_at", { ascending: false });
 
@@ -49,10 +51,12 @@ export default async function SubmissionsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-line text-[11px] uppercase tracking-wide text-muted">
               <tr>
+                <th className="px-3 py-2">Ticket No</th>
                 <th className="px-3 py-2">Hirer</th>
                 <th className="px-3 py-2">Vehicle</th>
                 <th className="px-3 py-2">Staff</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Submitted</th>
                 <th className="px-3 py-2">Created</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -73,6 +77,7 @@ export default async function SubmissionsPage() {
 
                 return (
                   <tr key={s.id}>
+                    <td className="px-3 py-2 font-mono text-fg">{s.ticket_no ?? "-"}</td>
                     <td className="px-3 py-2">
                       <Link href={`/submissions/${s.id}/edit`} className="text-amber hover:underline">
                         {hirer?.name || "(unnamed)"}
@@ -83,6 +88,26 @@ export default async function SubmissionsPage() {
                     </td>
                     <td className="px-3 py-2 text-fg">{staff ?? "-"}</td>
                     <td className="px-3 py-2 capitalize text-fg">{s.status}</td>
+                    <td className="px-3 py-2">
+                      {s.submitted_at ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-success">
+                            ✓ {formatMalaysiaDateTime(s.submitted_at)}
+                          </span>
+                          {profile.role === "admin" && (
+                            <UndoSubmitButton
+                              submissionId={s.id}
+                              label={hirer?.name || "(unnamed)"}
+                              ticketNo={s.ticket_no}
+                            />
+                          )}
+                        </div>
+                      ) : s.status === "generated" && profile.role === "admin" ? (
+                        <SubmitButton submissionId={s.id} label={hirer?.name || "(unnamed)"} />
+                      ) : (
+                        <span className="text-xs text-muted">-</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 font-mono text-fg">
                       {formatMalaysiaDateTime(s.created_at)}
                     </td>
@@ -108,7 +133,7 @@ export default async function SubmissionsPage() {
               })}
               {(!submissions || submissions.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-muted">
+                  <td colSpan={8} className="px-3 py-6 text-center text-muted">
                     No submissions yet.
                   </td>
                 </tr>

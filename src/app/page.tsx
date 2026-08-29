@@ -101,11 +101,14 @@ export default async function HomePage() {
     timeZone: "UTC",
   });
 
+  // Counts submissions the admin has actually marked "Submitted" (to the
+  // credit company) this month - not just generated - credited to the staff
+  // who originally created it.
   const { data: generatedSubs } = await supabase
     .from("submissions")
     .select("created_by, profiles:created_by(full_name, avatar_path)")
-    .eq("status", "generated")
-    .gte("created_at", monthStart);
+    .not("submitted_at", "is", null)
+    .gte("submitted_at", monthStart);
 
   const counts = new Map<string, LeaderboardEntry>();
   for (const s of generatedSubs ?? []) {
@@ -267,12 +270,12 @@ export default async function HomePage() {
               </div>
             </div>
             <p className="mt-2 text-center text-sm text-fuchsia-50">
-              Most cases generated in {monthLabel}.
+              Most cases submitted in {monthLabel}.
             </p>
 
             {leaderboard.length === 0 ? (
               <p className="mt-6 text-center text-sm text-fuchsia-50">
-                No cases generated yet this month.
+                No cases submitted yet this month.
               </p>
             ) : (
               <>

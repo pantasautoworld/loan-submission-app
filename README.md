@@ -97,3 +97,21 @@ Railway are all straightforward:
   overwritten with the real values wherever they appear on that sheet (works regardless
   of merged-range size/position). Month/year and earnings/deductions figures are left
   as-is from whatever the admin already filled into the template.
+- **Ticket numbers**: a submission has no `ticket_no` until an admin reviews it and
+  clicks **Submitted** on the Submissions page - representing the moment it's actually
+  sent to the credit company, not when staff first create or generate it. Clicking
+  Submitted sets `submitted_at`, and a Postgres trigger (`assign_submission_ticket_no`,
+  fired `BEFORE UPDATE`) assigns the number at that instant, e.g. `PANTAS/008/001`
+  (`008` = month, `001` = running number that resets to `001` each Malaysia-time month).
+  A `submission_ticket_counters` table tracks the last-used number per year-month via
+  an atomic upsert, so numbers stay sequential even under concurrent submits. The
+  trigger only fires on the `NULL -> NOT NULL` transition of `submitted_at`, so
+  regenerating the packet afterwards never reassigns a number. Deleted submissions'
+  numbers are never reused. An admin can click **Undo** next to a submitted row to
+  reverse an accidental click - this clears both `submitted_at` and `ticket_no`, so
+  the number it briefly held is likewise never reused; the next real Submitted click
+  gets a fresh one from the trigger.
+- **Telegram notifications**: staff creating/generating a submission does not notify
+  Telegram - only the admin's Submitted click does (`markSubmitted` in
+  `src/app/submissions/actions.ts`), guarded by the same `submitted_at IS NULL` check
+  so a regenerate or double-click never sends a duplicate message.

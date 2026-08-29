@@ -74,6 +74,10 @@ export interface SubmissionRow {
   finance_loan: number | null;
   tenure_year: number | null;
   created_at: string;
+  /** When an admin clicked "Submitted" (submitted to the credit company) - null until then. */
+  submitted_at: string | null;
+  /** Auto-assigned by a DB trigger the moment submitted_at is first set, e.g. "PANTAS/008/001" - resets to 001 each Malaysia-time month. Null until submitted. */
+  ticket_no: string | null;
 }
 
 export interface DocumentRow {

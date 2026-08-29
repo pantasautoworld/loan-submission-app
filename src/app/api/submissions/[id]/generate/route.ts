@@ -5,7 +5,6 @@ import { buildWorkbookBuffer } from "@/lib/pdf/buildWorkbook";
 import { convertXlsxToPdf } from "@/lib/convertToPdf";
 import { mergePdfPacketWithAttachments, type Attachment } from "@/lib/pdf/mergeDocuments";
 import { withTimeout } from "@/lib/withTimeout";
-import { notifyTelegram } from "@/lib/telegram";
 import type { SignerRole } from "@/lib/formTemplate";
 import type { DocType, DocumentRow } from "@/lib/types";
 
@@ -137,19 +136,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (insertError) throw new Error(insertError.message);
 
     await supabase.from("submissions").update({ status: "generated" }).eq("id", submissionId);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-    void notifyTelegram(
-      `✅ <b>New submission generated</b>\n` +
-        `Hirer: ${doc.hirer.name || "-"}\n` +
-        `Vehicle: ${doc.vehicle.plateNo || "-"} ${doc.vehicle.model || ""}`.trim() +
-        `\n` +
-        `By: ${profile?.full_name || "Unknown staff"}`
-    );
 
     return NextResponse.json({ pdf_path: pdfPath });
   } catch (err) {

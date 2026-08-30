@@ -24,11 +24,10 @@ export function NewInvoiceForm({ staffName }: Props) {
   const [buyerAddress, setBuyerAddress] = useState("");
 
   const [agentName, setAgentName] = useState(staffName);
-  const [financier, setFinancier] = useState("");
   const [term, setTerm] = useState<"Loan" | "Cash">("Loan");
-  const [sellingPrice, setSellingPrice] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const sellingPrice = (Number(loanAmount) || 0) + (Number(depositAmount) || 0);
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,9 +67,8 @@ export function NewInvoiceForm({ staffName }: Props) {
       setError("Enter the vehicle number.");
       return;
     }
-    const priceNum = Number(sellingPrice);
-    if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      setError("Enter a valid selling price.");
+    if (sellingPrice <= 0) {
+      setError("Enter a deposit and/or loan amount.");
       return;
     }
     setError(null);
@@ -78,7 +76,6 @@ export function NewInvoiceForm({ staffName }: Props) {
     try {
       const formData = new FormData();
       formData.set("agentName", agentName.trim());
-      formData.set("financier", financier.trim());
       formData.set("term", term);
       formData.set("buyerName", buyerName.trim());
       formData.set("buyerAddress", buyerAddress.trim());
@@ -86,7 +83,6 @@ export function NewInvoiceForm({ staffName }: Props) {
       formData.set("model", model.trim());
       formData.set("chassisNo", chassisNo.trim());
       formData.set("engineNo", engineNo.trim());
-      formData.set("sellingPrice", sellingPrice);
       formData.set("loanAmount", loanAmount || "0");
       formData.set("depositAmount", depositAmount || "0");
       if (grantFile) formData.set("grant", grantFile);
@@ -177,28 +173,7 @@ export function NewInvoiceForm({ staffName }: Props) {
           </div>
         </div>
 
-        {term === "Loan" && (
-          <>
-            <label className={LABEL}>Financier</label>
-            <input
-              className={FIELD}
-              value={financier}
-              onChange={(e) => setFinancier(e.target.value)}
-              placeholder="e.g. ELK DESA CAPITAL SDN BHD"
-            />
-          </>
-        )}
-
         <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label className={LABEL}>Selling Price (RM)</label>
-            <input
-              type="number"
-              className={FIELD}
-              value={sellingPrice}
-              onChange={(e) => setSellingPrice(e.target.value)}
-            />
-          </div>
           <div>
             <label className={LABEL}>Deposit Amount (RM)</label>
             <input
@@ -208,19 +183,23 @@ export function NewInvoiceForm({ staffName }: Props) {
               onChange={(e) => setDepositAmount(e.target.value)}
             />
           </div>
+          {term === "Loan" && (
+            <div>
+              <label className={LABEL}>Loan Amount (RM)</label>
+              <input
+                type="number"
+                className={FIELD}
+                value={loanAmount}
+                onChange={(e) => setLoanAmount(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
-        {term === "Loan" && (
-          <div>
-            <label className={LABEL}>Loan Amount (RM)</label>
-            <input
-              type="number"
-              className={FIELD}
-              value={loanAmount}
-              onChange={(e) => setLoanAmount(e.target.value)}
-            />
-          </div>
-        )}
+        <p className="mb-3 text-sm text-muted">
+          Selling price: <span className="font-mono font-semibold text-fg">RM{sellingPrice.toLocaleString()}</span>{" "}
+          (deposit + loan)
+        </p>
 
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}
 

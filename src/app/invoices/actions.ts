@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import { attachClaimInvoiceGrant, createClaimInvoice, deleteClaimInvoice } from "@/lib/claimInvoices";
 
+/** Every claim invoice goes through the same financier - no longer a per-invoice choice. */
+const FINANCIER = "ELK";
+
 export async function createInvoice(formData: FormData) {
   const { profile, supabase } = await requireStaff();
 
   const agentName = String(formData.get("agentName") ?? "").trim();
-  const financier = String(formData.get("financier") ?? "").trim();
   const term = String(formData.get("term") ?? "Loan") === "Cash" ? "Cash" : "Loan";
   const buyerName = String(formData.get("buyerName") ?? "").trim();
   const buyerAddress = String(formData.get("buyerAddress") ?? "").trim();
@@ -17,17 +19,20 @@ export async function createInvoice(formData: FormData) {
   const model = String(formData.get("model") ?? "").trim();
   const chassisNo = String(formData.get("chassisNo") ?? "").trim();
   const engineNo = String(formData.get("engineNo") ?? "").trim();
-  const sellingPrice = Number(formData.get("sellingPrice") ?? 0);
-  const loanAmount = Number(formData.get("loanAmount") ?? 0);
-  const depositAmount = Number(formData.get("depositAmount") ?? 0);
+  const loanAmountRaw = Number(formData.get("loanAmount") ?? 0);
+  const depositAmountRaw = Number(formData.get("depositAmount") ?? 0);
+  const loanAmount = Number.isFinite(loanAmountRaw) ? loanAmountRaw : 0;
+  const depositAmount = Number.isFinite(depositAmountRaw) ? depositAmountRaw : 0;
+  // Selling price is never entered directly - it's always the sum of the loan and deposit.
+  const sellingPrice = loanAmount + depositAmount;
 
   if (!buyerName) throw new Error("Enter the buyer's name.");
   if (!vehicleNo) throw new Error("Enter the vehicle number.");
-  if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) throw new Error("Enter a valid selling price.");
+  if (sellingPrice <= 0) throw new Error("Enter a deposit and/or loan amount.");
 
   const invoice = await createClaimInvoice(supabase, {
     agentName: agentName || profile.full_name || "Staff",
-    financier,
+    financier: FINANCIER,
     term,
     buyerName,
     buyerAddress,
@@ -36,8 +41,8 @@ export async function createInvoice(formData: FormData) {
     chassisNo,
     engineNo,
     sellingPrice,
-    loanAmount: Number.isFinite(loanAmount) ? loanAmount : 0,
-    depositAmount: Number.isFinite(depositAmount) ? depositAmount : 0,
+    loanAmount,
+    depositAmount,
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });

@@ -76,6 +76,30 @@ export async function createPuspakomBooking(
   if (error) throw new Error(error.message);
 }
 
+export interface UpdatePuspakomBookingInput {
+  branch: string;
+  company: string;
+  appointmentDate: string;
+  appointmentTime: string;
+}
+
+export async function updatePuspakomBooking(
+  supabase: SupabaseClient,
+  bookingId: string,
+  input: UpdatePuspakomBookingInput
+): Promise<void> {
+  const { error } = await supabase
+    .from("puspakom_bookings")
+    .update({
+      branch: input.branch,
+      company: input.company,
+      appointment_date: input.appointmentDate,
+      appointment_time: input.appointmentTime || null,
+    })
+    .eq("id", bookingId);
+  if (error) throw new Error(error.message);
+}
+
 export async function markPuspakomBookingComplete(
   supabase: SupabaseClient,
   bookingId: string,

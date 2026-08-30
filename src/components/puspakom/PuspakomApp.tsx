@@ -6,6 +6,7 @@ import type { PuspakomBookingRow } from "@/lib/puspakomBookings";
 import { completePuspakomBooking, removePuspakomBooking } from "@/app/puspakom/actions";
 import { malaysiaDateParts, malaysiaTodayIso } from "@/lib/timezone";
 import { AddPuspakomModal } from "./AddPuspakomModal";
+import { EditPuspakomModal } from "./EditPuspakomModal";
 
 interface Props {
   role: string;
@@ -42,6 +43,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
   const [addingBooking, setAddingBooking] = useState(false);
   const [selected, setSelected] = useState<PuspakomBookingRow | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [editingBooking, setEditingBooking] = useState<PuspakomBookingRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const bookingsByDate = useMemo(() => {
@@ -239,6 +241,15 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
               >
                 Close
               </button>
+              <button
+                onClick={() => {
+                  setEditingBooking(selected);
+                  setSelected(null);
+                }}
+                className="rounded-[7px] border border-line bg-panel-raised px-4 py-2 text-sm text-fg hover:border-amber"
+              >
+                Edit
+              </button>
               {role === "admin" && (
                 <button
                   onClick={() => handleDelete(selected)}
@@ -313,6 +324,12 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                       </span>
                     </div>
                     <div className="mt-2 flex justify-end gap-3">
+                      <button
+                        onClick={() => setEditingBooking(b)}
+                        className="text-xs text-muted hover:text-fg hover:underline"
+                      >
+                        Edit
+                      </button>
                       {role === "admin" && (
                         <button
                           onClick={() => handleDelete(b)}
@@ -354,6 +371,14 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
           vehicles={vehicles}
           onClose={() => setAddingBooking(false)}
           onSaved={() => setAddingBooking(false)}
+        />
+      )}
+
+      {editingBooking && (
+        <EditPuspakomModal
+          booking={editingBooking}
+          onClose={() => setEditingBooking(null)}
+          onSaved={() => setEditingBooking(null)}
         />
       )}
     </div>

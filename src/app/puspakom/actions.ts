@@ -6,6 +6,7 @@ import {
   createPuspakomBooking,
   deletePuspakomBooking,
   markPuspakomBookingComplete,
+  updatePuspakomBooking,
 } from "@/lib/puspakomBookings";
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
@@ -36,6 +37,21 @@ export async function logPuspakomBooking(formData: FormData) {
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });
+
+  revalidatePath("/puspakom");
+  revalidatePath("/stock-board");
+}
+
+export async function editPuspakomBooking(bookingId: string, formData: FormData) {
+  const { supabase } = await requireStaff();
+
+  const branch = String(formData.get("branch") ?? "").trim();
+  const company = String(formData.get("company") ?? "").trim();
+  const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
+  const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
+  if (!appointmentDate) throw new Error("Pick an appointment date.");
+
+  await updatePuspakomBooking(supabase, bookingId, { branch, company, appointmentDate, appointmentTime });
 
   revalidatePath("/puspakom");
   revalidatePath("/stock-board");

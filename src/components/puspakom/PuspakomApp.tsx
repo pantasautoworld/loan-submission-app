@@ -41,6 +41,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
   const [viewMonth, setViewMonth] = useState(todayMonth);
   const [addingBooking, setAddingBooking] = useState(false);
   const [selected, setSelected] = useState<PuspakomBookingRow | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const bookingsByDate = useMemo(() => {
@@ -163,9 +164,14 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
               <div key={`${wi}-${di}`} className={`min-h-[92px] p-1.5 ${dateIso ? "bg-panel" : "bg-panel/40"}`}>
                 {dateIso && (
                   <>
-                    <div className={`mb-1 text-[11px] ${isToday ? "font-bold text-amber" : "text-muted"}`}>
+                    <button
+                      onClick={() => setSelectedDate(dateIso)}
+                      className={`mb-1 block w-full rounded text-left text-[11px] hover:text-amber ${
+                        isToday ? "font-bold text-amber" : "text-muted"
+                      }`}
+                    >
                       {Number(dateIso.slice(-2))}
-                    </div>
+                    </button>
                     <div className="space-y-1">
                       {dayBookings.map((b) => (
                         <button
@@ -251,6 +257,93 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                   {busyId === selected.id ? "…" : "Mark complete"}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedDate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-5"
+          onClick={() => setSelectedDate(null)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-[460px] overflow-y-auto rounded-[10px] border border-line bg-panel p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display mb-4 text-lg font-semibold text-fg">
+              {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </h3>
+
+            {(bookingsByDate.get(selectedDate) ?? []).length === 0 ? (
+              <p className="text-sm text-muted">No bookings this day.</p>
+            ) : (
+              <div className="divide-y divide-line border-t border-line">
+                {(bookingsByDate.get(selectedDate) ?? []).map((b) => (
+                  <div key={b.id} className="py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="inline-flex items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-2.5 py-0.5 font-mono text-xs font-bold tracking-wide text-[#14171a]">
+                          {b.no_plate}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-fg">{b.vehicle}</div>
+                        {b.company && <div className="text-xs text-muted">{b.company}</div>}
+                        <div className="text-xs text-muted">
+                          {b.appointment_time && `${fmtTime(b.appointment_time)} · `}
+                          {b.branch || "No branch set"}
+                        </div>
+                        <div className="text-[11px] text-muted">
+                          Booked by {b.created_by_name}
+                          {b.status === "completed" && b.completed_by_name
+                            ? ` · Completed by ${b.completed_by_name}`
+                            : ""}
+                        </div>
+                      </div>
+                      <span
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                          b.status === "completed" ? "border-success text-success" : "border-danger text-danger"
+                        }`}
+                      >
+                        {b.status === "completed" ? "Completed" : "Not yet inspected"}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex justify-end gap-3">
+                      {role === "admin" && (
+                        <button
+                          onClick={() => handleDelete(b)}
+                          disabled={busyId === b.id}
+                          className="text-xs text-muted hover:text-danger hover:underline disabled:opacity-50"
+                        >
+                          {busyId === b.id ? "…" : "Delete"}
+                        </button>
+                      )}
+                      {b.status === "scheduled" && (
+                        <button
+                          onClick={() => handleComplete(b)}
+                          disabled={busyId === b.id}
+                          className="text-xs text-success hover:underline disabled:opacity-50"
+                        >
+                          {busyId === b.id ? "…" : "Mark complete"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="rounded-[7px] border border-line bg-panel-raised px-4 py-2 text-sm text-fg hover:border-amber"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

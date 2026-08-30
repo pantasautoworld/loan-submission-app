@@ -129,11 +129,18 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
     }
     rows.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 
+    const byMethod = new Map<string, number>();
+    for (const r of rows) {
+      const key = r.method || "Not specified";
+      byMethod.set(key, (byMethod.get(key) ?? 0) + r.amount);
+    }
+
     return {
       rows,
       total: rows.reduce((sum, r) => sum + r.amount, 0),
       carCount: new Set(rows.map((r) => r.plate)).size,
       pendingCount,
+      byMethod: [...byMethod.entries()].sort((a, b) => b[1] - a[1]),
     };
   }, [deposits, summaryMonth]);
 
@@ -224,6 +231,20 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
               <div className="text-[11px] uppercase tracking-wide text-muted">Still pending</div>
             </div>
           </div>
+
+          {monthlySummary.byMethod.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {monthlySummary.byMethod.map(([method, amount]) => (
+                <div
+                  key={method}
+                  className="flex items-center gap-1.5 rounded-full border border-line bg-panel-raised px-3 py-1 text-xs"
+                >
+                  <span className="text-muted">{method}</span>
+                  <span className="font-mono font-semibold text-fg">{fmtMoney(amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {monthlySummary.rows.length === 0 ? (
             <p className="text-sm text-muted">No approved deposits logged this month.</p>

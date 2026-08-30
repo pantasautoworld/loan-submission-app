@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import sharp from "sharp";
 
 const MODEL = process.env.ANTHROPIC_EXTRACTION_MODEL || "claude-haiku-4-5-20251001";
 
@@ -123,19 +124,15 @@ export interface GrantExtraction {
   ownerAddress: string;
 }
 
-/** Fuller read of the same document extractVocPlate uses, for the claim invoice generator - pulls every field the invoice needs, not just the plate. */
-export async function extractGrantDetails(source: DocSource): Promise<GrantExtraction> {
-  const result = await extractJson<GrantExtraction>(
-    source,
-    `This is a Malaysian Vehicle Ownership Certificate ("Sijil Pemilikan Kenderaan" / "Perakuan Pendaftaran Kenderaan"). Read these fields exactly as printed:
+const GRANT_PROMPT = `This is a Malaysian Vehicle Ownership Certificate ("Sijil Pemilikan Kenderaan" / "Perakuan Pendaftaran Kenderaan"). Read these fields exactly as printed:
 - "No. Pendaftaran" (registration/plate no.) - a short plate like "WWT 7595", never the engine or chassis number.
 - "Buatan / Nama Model" (make/model).
 - "No. Chasis / No. Enjin" - this is usually ONE combined row holding BOTH numbers together, separated by a "/", e.g. "PL1BH3LTRLG058271 / S4PEVW8884" (chassis number first, engine number second - split it into chassisNo and engineNo accordingly). If chassis and engine are instead printed as two separate labelled fields, read them separately the same way. Either way, do NOT use "Keupayaan Enjin" (engine capacity, a short number like "1332" or "1500") for the engine number - that is a completely different field.
 - "Nama Pemunya Berdaftar" (registered owner's full name).
 - "Alamat" (registered owner's address).
-Return {"vehicleNo": string, "model": string, "chassisNo": string, "engineNo": string, "ownerName": string, "ownerAddress": string}. Use an empty string for any field you cannot confidently read rather than guessing.`
-  );
+Return {"vehicleNo": string, "model": string, "chassisNo": string, "engineNo": string, "ownerName": string, "ownerAddress": string}. Use an empty string for any field you cannot confidently read rather than guessing.`;
 
+function normalizeGrant(result: GrantExtraction): GrantExtraction {
   return {
     vehicleNo: result.vehicleNo.trim(),
     model: result.model.trim(),
@@ -144,4 +141,92 @@ Return {"vehicleNo": string, "model": string, "chassisNo": string, "engineNo": s
     ownerName: result.ownerName.trim(),
     ownerAddress: result.ownerAddress.trim(),
   };
+}
+
+/** Higher = more confidently read - a real plate shape is the strongest signal a given orientation actually read the document rather than hallucinating. */
+function scoreGrantExtraction(r: GrantExtraction): number {
+  const plate = r.vehicleNo.toUpperCase().replace(/\s+/g, "");
+  let score = 0;
+  if (PLATE_PATTERN.test(plate)) score += 3;
+  if (r.model) score += 1;
+  if (r.chassisNo.length > 10) score += 1;
+  if (r.engineNo.length > 5) score += 1;
+  if (r.ownerName) score += 1;
+  return score;
+}
+
+const EMPTY_GRANT: GrantExtraction = {
+  vehicleNo: "",
+  model: "",
+  chassisNo: "",
+  engineNo: "",
+  ownerName: "",
+  ownerAddress: "",
+};
+
+async function extractGrantAtAngle(
+  imageBytes: Buffer,
+  mediaType: "image/jpeg" | "image/png" | "image/webp",
+  angle: number
+): Promise<GrantExtraction> {
+  const rotated = sharp(imageBytes).rotate(angle);
+  const rotatedBytes =
+    mediaType === "image/png"
+      ? await rotated.png().toBuffer()
+      : mediaType === "image/webp"
+        ? await rotated.webp().toBuffer()
+        : await rotated.jpeg().toBuffer();
+  const result = await extractJson<GrantExtraction>(
+    { kind: "image", mediaType, base64: rotatedBytes.toString("base64") },
+    GRANT_PROMPT
+  );
+  return normalizeGrant(result);
+}
+
+/** Fuller read of the same document extractVocPlate uses, for the claim invoice generator - pulls every field the invoice needs, not just the plate. */
+export async function extractGrantDetails(source: DocSource): Promise<GrantExtraction> {
+  if (source.kind === "pdf") {
+    const result = await extractJson<GrantExtraction>(source, GRANT_PROMPT);
+    return normalizeGrant(result);
+  }
+
+  // Phone photos of this document are frequently uploaded sideways or upside
+  // down, and reading it at the wrong rotation doesn't fail cleanly - the
+  // model hallucinates a plausible-looking but entirely wrong plate/chassis/
+  // model instead of admitting it can't read it, and a *different* wrong
+  // guess nearly every time. A genuine read of the actual pixels reproduces
+  // the same plate reliably, so each orientation is tried twice and a plate
+  // only gets trusted once it repeats - "looks complete" alone (checked via
+  // scoreGrantExtraction to rank *within* the winning group) can't tell a
+  // hallucination from a real read, since a hallucination fakes that too.
+  const imageBytes = Buffer.from(source.base64, "base64");
+  const mediaType = source.mediaType;
+
+  const attempts = await Promise.all(
+    [0, 90, 180, 270].flatMap((angle) => [
+      extractGrantAtAngle(imageBytes, mediaType, angle),
+      extractGrantAtAngle(imageBytes, mediaType, angle),
+    ])
+  );
+
+  const groups = new Map<string, GrantExtraction[]>();
+  for (const r of attempts) {
+    const key = r.vehicleNo.toUpperCase().replace(/\s+/g, "");
+    if (!key || !PLATE_PATTERN.test(key)) continue;
+    const list = groups.get(key) ?? [];
+    list.push(r);
+    groups.set(key, list);
+  }
+
+  let bestGroup: GrantExtraction[] = [];
+  for (const list of groups.values()) {
+    if (list.length > bestGroup.length) bestGroup = list;
+  }
+
+  // No plate came back the same way twice - too unreliable to trust any
+  // single guess, so leave every field blank for the runner to fill in by hand.
+  if (bestGroup.length < 2) return EMPTY_GRANT;
+
+  bestGroup.sort((a, b) => scoreGrantExtraction(b) - scoreGrantExtraction(a));
+  return bestGroup[0];
 }

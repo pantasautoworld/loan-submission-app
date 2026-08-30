@@ -11,9 +11,9 @@ export default async function DepositsPage() {
     fetchStockBoardVehicles(),
     fetchCarDeposits(supabase),
   ]);
-  // Sold cars are excluded entirely - not addable, not searchable for deposit purposes.
-  // Everything else (approved/tracked/default-view logic) is computed client-side in
-  // DepositPaymentApp, since it needs to react live to what staff type into search.
+  // Sold cars are excluded - the plate lookup for "+ Add deposit" also refuses them
+  // (see logDepositPaymentByPlate), this just keeps a sold car's card from lingering
+  // in the display list here too.
   const vehicles = allVehicles.filter((v) => v.status !== "sold");
 
   const depositsWithReceiptUrls = await Promise.all(

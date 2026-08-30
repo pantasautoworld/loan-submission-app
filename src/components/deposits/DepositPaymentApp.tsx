@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { addDepositCar, deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
+import { deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
+import { AddDepositModal } from "./AddDepositModal";
 
 type PaymentWithUrl = DepositPaymentRow & { receiptUrl: string | null };
 type DepositWithUrls = CarDepositRow & { payments: PaymentWithUrl[] };
@@ -12,7 +13,7 @@ type DepositWithUrls = CarDepositRow & { payments: PaymentWithUrl[] };
 interface Props {
   staffName: string;
   role: string;
-  /** Every non-sold Stock Board car - filtered/searched client-side against `deposits`. */
+  /** Every non-sold Stock Board car - cross-referenced against `deposits` to render each tracked car's details. */
   vehicles: StockBoardVehicle[];
   deposits: DepositWithUrls[];
 }
@@ -28,10 +29,6 @@ function fmtDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function normalizePlate(s: string): string {
-  return s.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -72,10 +69,8 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
 
 export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
-  const [search, setSearch] = useState("");
+  const [addingDeposit, setAddingDeposit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
 
   async function handleDelete(payment: PaymentWithUrl) {
     if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
@@ -89,72 +84,35 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
     }
   }
 
-  async function handleAddCar(car: StockBoardVehicle) {
-    setAddError(null);
-    setIsAdding(true);
-    try {
-      await addDepositCar(car.id, car.vin, car.vehicle);
-      setModalCar(car); // jump straight into logging its first payment
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Could not add that car.");
-    } finally {
-      setIsAdding(false);
-    }
-  }
-
-  const trackedIds = new Set(deposits.map((d) => d.stock_board_vehicle_id));
-  const approvedIds = new Set(
-    deposits.filter((d) => d.payments.some((p) => p.status === "approved")).map((d) => d.stock_board_vehicle_id)
-  );
-
-  const q = search.trim().toLowerCase();
-  // Resting state: only cars with at least one approved deposit payment. Searching
-  // widens this to any *tracked* car (approved or not) matching the query, so staff
-  // can still find and manage one that's still pending approval.
-  const displayedCars = q
-    ? vehicles.filter((v) => trackedIds.has(v.id) && `${v.vin} ${v.vehicle}`.toLowerCase().includes(q))
-    : vehicles.filter((v) => approvedIds.has(v.id));
-
-  // An exact plate match that isn't tracked yet - offered as a one-tap "add this" prompt.
-  const addSuggestion = q
-    ? vehicles.find((v) => !trackedIds.has(v.id) && normalizePlate(v.vin) === normalizePlate(search))
-    : undefined;
+  // Every car with at least one deposit record, most recently active first.
+  const trackedCars = vehicles
+    .filter((v) => deposits.some((d) => d.stock_board_vehicle_id === v.id))
+    .sort((a, b) => {
+      const da = deposits.find((d) => d.stock_board_vehicle_id === a.id);
+      const db = deposits.find((d) => d.stock_board_vehicle_id === b.id);
+      const latest = (d: DepositWithUrls | undefined) =>
+        d?.payments[0]?.uploaded_at ?? d?.created_at ?? "";
+      return latest(db).localeCompare(latest(da));
+    });
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search or add plate…"
-        className="mb-4 max-w-[280px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-      />
+      <div className="mb-4">
+        <button
+          onClick={() => setAddingDeposit(true)}
+          className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
+        >
+          + Add deposit
+        </button>
+      </div>
 
-      {addSuggestion && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[7px] border border-dashed border-amber bg-panel-raised px-3 py-2.5">
-          <span className="text-sm text-fg">
-            <span className="font-mono font-semibold">{addSuggestion.vin}</span> — {addSuggestion.vehicle} isn&apos;t
-            tracked yet.
-          </span>
-          <button
-            onClick={() => handleAddCar(addSuggestion)}
-            disabled={isAdding}
-            className="whitespace-nowrap rounded-[7px] bg-amber px-3 py-1.5 text-xs font-semibold text-amber-fg hover:brightness-110 disabled:opacity-50"
-          >
-            {isAdding ? "Adding…" : "+ Add for deposit"}
-          </button>
-        </div>
-      )}
-      {addError && <p className="mb-4 text-xs text-danger">{addError}</p>}
-
-      {displayedCars.length === 0 ? (
+      {trackedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          {q
-            ? "No tracked car matches that plate - add it above if it's a real car on the Stock Board."
-            : "No deposits approved yet."}
+          No deposits logged yet. Use &quot;+ Add deposit&quot; to log the first one.
         </div>
       ) : (
         <div className="space-y-4">
-          {displayedCars.map((car) => {
+          {trackedCars.map((car) => {
             const deposit = deposits.find((d) => d.stock_board_vehicle_id === car.id);
             const payments = deposit?.payments ?? [];
             const collected = payments
@@ -245,6 +203,10 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
           onClose={() => setModalCar(null)}
           onSaved={() => setModalCar(null)}
         />
+      )}
+
+      {addingDeposit && (
+        <AddDepositModal onClose={() => setAddingDeposit(false)} onSaved={() => setAddingDeposit(false)} />
       )}
     </div>
   );

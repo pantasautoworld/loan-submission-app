@@ -170,21 +170,6 @@ async function upsertCarDeposit(
 }
 
 /**
- * Starts tracking a car for deposit payments without logging one yet - the
- * "add plate manually" entry point, for a car not currently auto-listed
- * (e.g. its Stock Board status isn't Loan Approved/Deposit Received). Just
- * an upsert, so calling it again for the same car is a harmless no-op.
- */
-export async function ensureCarDeposit(
-  stockBoardVehicleId: string,
-  noPlate: string,
-  vehicle: string
-): Promise<CarDepositRow> {
-  const admin = createAdminClient();
-  return upsertCarDeposit(admin, stockBoardVehicleId, noPlate, vehicle);
-}
-
-/**
  * Shared by both entry points (in-app upload and a receipt texted straight
  * to the Telegram bot) so they can't drift: creates/reuses the car's
  * deposit record, uploads the receipt, records the payment as "pending",

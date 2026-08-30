@@ -4,44 +4,46 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import {
   DEPOSIT_METHODS,
-  ensureCarDeposit,
   recordDepositPayment,
   removeDepositPayment,
   setSigningDate as saveSigningDate,
   type DepositMethod,
 } from "@/lib/depositPayments";
+import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
-export async function logDepositPayment(formData: FormData) {
-  const { profile } = await requireStaff();
-
-  const stockBoardVehicleId = String(formData.get("stockBoardVehicleId") ?? "");
-  const noPlate = String(formData.get("noPlate") ?? "");
-  const vehicle = String(formData.get("vehicle") ?? "");
+async function extractPaymentFields(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const receiptNumber = String(formData.get("receiptNumber") ?? "").trim();
   const methodRaw = String(formData.get("method") ?? "");
   const amount = Number(formData.get("amount"));
   const file = formData.get("receipt") as File | null;
 
-  if (!stockBoardVehicleId || !noPlate) throw new Error("Missing car reference.");
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount.");
   if (!DEPOSIT_METHODS.includes(methodRaw as DepositMethod)) throw new Error("Select a deposit method.");
-  const method = methodRaw as DepositMethod;
 
   const hasReceipt = !!file && file.size > 0;
-  const bytes = hasReceipt ? Buffer.from(await file!.arrayBuffer()) : null;
-  const ext = hasReceipt ? (file!.name.split(".").pop() || "jpg").toLowerCase() : null;
+  const receiptBytes = hasReceipt ? Buffer.from(await file.arrayBuffer()) : null;
+  const receiptExt = hasReceipt ? (file.name.split(".").pop() || "jpg").toLowerCase() : null;
+
+  return { note, receiptNumber, method: methodRaw as DepositMethod, amount, receiptBytes, receiptExt };
+}
+
+/** Used by each already-tracked car's own "+ Add payment" button, where the car is already known. */
+export async function logDepositPayment(formData: FormData) {
+  const { profile } = await requireStaff();
+
+  const stockBoardVehicleId = String(formData.get("stockBoardVehicleId") ?? "");
+  const noPlate = String(formData.get("noPlate") ?? "");
+  const vehicle = String(formData.get("vehicle") ?? "");
+  if (!stockBoardVehicleId || !noPlate) throw new Error("Missing car reference.");
+
+  const fields = await extractPaymentFields(formData);
 
   await recordDepositPayment({
     stockBoardVehicleId,
     noPlate,
     vehicle,
-    note,
-    method,
-    receiptNumber,
-    amount,
-    receiptBytes: bytes,
-    receiptExt: ext,
+    ...fields,
     uploadedByProfileId: profile.id,
     uploadedByName: profile.full_name || "Staff",
     source: "app",
@@ -50,16 +52,30 @@ export async function logDepositPayment(formData: FormData) {
   revalidatePath("/deposits");
 }
 
-/**
- * Starts tracking a car that isn't auto-listed (Loan Submission/Available,
- * not yet Loan Approved) so staff can log a payment against it early. The
- * car is picked from a live-fetched list client-side, so its id/plate/model
- * are trusted here the same way logDepositPayment already trusts them.
- */
-export async function addDepositCar(stockBoardVehicleId: string, noPlate: string, vehicle: string) {
-  await requireStaff();
-  if (!stockBoardVehicleId || !noPlate) throw new Error("Missing car reference.");
-  await ensureCarDeposit(stockBoardVehicleId, noPlate, vehicle);
+/** Used by the standalone "+ Add deposit" button, where staff type the plate directly - looked up here. */
+export async function logDepositPaymentByPlate(formData: FormData) {
+  const { profile } = await requireStaff();
+
+  const plate = String(formData.get("plate") ?? "").trim();
+  if (!plate) throw new Error("Enter a plate number.");
+
+  const vehicles = await fetchStockBoardVehicles();
+  const vehicle = findByPlate(plate, vehicles);
+  if (!vehicle) throw new Error(`No car on the Stock Board matches plate "${plate}".`);
+  if (vehicle.status === "sold") throw new Error(`${vehicle.vehicle} (${vehicle.vin}) is already marked Sold.`);
+
+  const fields = await extractPaymentFields(formData);
+
+  await recordDepositPayment({
+    stockBoardVehicleId: vehicle.id,
+    noPlate: vehicle.vin,
+    vehicle: vehicle.vehicle,
+    ...fields,
+    uploadedByProfileId: profile.id,
+    uploadedByName: profile.full_name || "Staff",
+    source: "app",
+  });
+
   revalidatePath("/deposits");
 }
 

@@ -158,6 +158,7 @@ async function handleDepositPhoto(
       noPlate: vehicle.vin,
       vehicle: vehicle.vehicle,
       label: parsed.label,
+      method: "",
       amount: parsed.amount,
       receiptBytes: bytes,
       receiptExt: "jpg",
@@ -208,6 +209,7 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
     noPlate: resolved.carDeposit.no_plate,
     amount: resolved.payment.amount,
     label: resolved.payment.label,
+    method: resolved.payment.method,
     uploadedByName: resolved.payment.uploaded_by_name,
   })}\n\n${resolvedLine}`;
 

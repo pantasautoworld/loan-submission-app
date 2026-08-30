@@ -6,11 +6,15 @@ import {
   type InlineKeyboard,
 } from "@/lib/telegram";
 
+export const DEPOSIT_METHODS = ["Bank transfer", "Cash", "QR Scan", "E-Wallet"] as const;
+export type DepositMethod = (typeof DEPOSIT_METHODS)[number];
+
 export interface DepositPaymentRow {
   id: string;
   car_deposit_id: string;
   label: string;
   amount: number;
+  method: DepositMethod | "";
   receipt_path: string | null;
   status: "pending" | "approved" | "rejected";
   uploaded_by: string | null;
@@ -48,12 +52,14 @@ export function buildDepositCaption(input: {
   noPlate: string;
   amount: number;
   label: string;
+  method?: string;
   uploadedByName: string;
 }): string {
   return (
     `💰 <b>New deposit payment</b>\n` +
     `${input.vehicle} (${input.noPlate})\n` +
     `Amount: RM${input.amount.toLocaleString()}` +
+    (input.method ? `\nMethod: ${input.method}` : "") +
     (input.label ? `\nLabel: ${input.label}` : "") +
     `\nBy: ${input.uploadedByName}`
   );
@@ -92,6 +98,7 @@ export interface RecordDepositPaymentInput {
   noPlate: string;
   vehicle: string;
   label: string;
+  method: DepositMethod | "";
   amount: number;
   receiptBytes: Buffer;
   receiptExt: string;
@@ -130,6 +137,7 @@ export async function recordDepositPayment(
     .insert({
       car_deposit_id: carDeposit.id,
       label: input.label,
+      method: input.method,
       amount: input.amount,
       status: "pending",
       uploaded_by: input.uploadedByProfileId,
@@ -154,6 +162,7 @@ export async function recordDepositPayment(
     noPlate: input.noPlate,
     amount: input.amount,
     label: input.label,
+    method: input.method,
     uploadedByName: input.uploadedByName,
   });
 

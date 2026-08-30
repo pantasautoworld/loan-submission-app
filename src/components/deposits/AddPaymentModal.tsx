@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { logDepositPayment } from "@/app/deposits/actions";
+import { DEPOSIT_METHODS, type DepositMethod } from "@/lib/depositPayments";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
@@ -17,6 +18,7 @@ interface Props {
 
 export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose, onSaved }: Props) {
   const [label, setLabel] = useState("");
+  const [method, setMethod] = useState<DepositMethod | "">("");
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,10 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       setError("A receipt is required.");
       return;
     }
+    if (!method) {
+      setError("Select a deposit method.");
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -40,6 +46,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       formData.set("noPlate", noPlate);
       formData.set("vehicle", vehicle);
       formData.set("label", label.trim());
+      formData.set("method", method);
       formData.set("amount", amount);
       formData.set("receipt", file);
       await logDepositPayment(formData);
@@ -65,6 +72,20 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Booking deposit"
         />
+
+        <label className={LABEL}>Deposit method</label>
+        <select
+          className={FIELD}
+          value={method}
+          onChange={(e) => setMethod(e.target.value as DepositMethod | "")}
+        >
+          <option value="">Select method…</option>
+          {DEPOSIT_METHODS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
 
         <label className={LABEL}>Amount (RM)</label>
         <input

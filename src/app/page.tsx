@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
+import { LeaderboardMonthPicker } from "@/components/LeaderboardMonthPicker";
 import { initialsOf, avatarColor } from "@/lib/avatar";
 import { malaysiaDateParts, malaysiaMonthStartIso } from "@/lib/timezone";
 
@@ -88,27 +89,59 @@ function PodiumSlot({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
   );
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const { profile, supabase } = await requireStaff();
+  const { month: monthParam } = await searchParams;
 
   // Computed in Malaysia time (not the server's own UTC) so "this month" matches
   // what staff actually mean, especially near a day/month boundary.
-  const { year: myYear, month: myMonth } = malaysiaDateParts();
+  const { year: currentYear, month: currentMonth } = malaysiaDateParts();
+
+  // The dropdown only ever offers the last 12 months, but validate anyway in
+  // case someone edits the URL by hand - anything unparseable or in the
+  // future just falls back to the current month.
+  let myYear = currentYear;
+  let myMonth = currentMonth;
+  const parsedMonth = monthParam?.match(/^(\d{4})-(\d{2})$/);
+  if (parsedMonth) {
+    const y = Number(parsedMonth[1]);
+    const m = Number(parsedMonth[2]);
+    if (y < currentYear || (y === currentYear && m <= currentMonth)) {
+      myYear = y;
+      myMonth = m;
+    }
+  }
+
   const monthStart = malaysiaMonthStartIso(myYear, myMonth);
+  const monthEnd = malaysiaMonthStartIso(myYear, myMonth + 1);
   const monthLabel = new Date(Date.UTC(myYear, myMonth - 1, 1)).toLocaleString("en-US", {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
   });
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(currentYear, currentMonth - 1 - i, 1));
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    return {
+      value: `${y}-${String(m).padStart(2, "0")}`,
+      label: d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    };
+  });
 
   // Counts submissions the admin has actually marked "Submitted" (to the
-  // credit company) this month - not just generated - credited to the staff
+  // credit company) that month - not just generated - credited to the staff
   // who originally created it.
   const { data: generatedSubs } = await supabase
     .from("submissions")
     .select("created_by, profiles:created_by(full_name, avatar_path)")
     .not("submitted_at", "is", null)
-    .gte("submitted_at", monthStart);
+    .gte("submitted_at", monthStart)
+    .lt("submitted_at", monthEnd);
 
   const counts = new Map<string, LeaderboardEntry>();
   for (const s of generatedSubs ?? []) {
@@ -354,13 +387,14 @@ export default async function HomePage() {
                 </span>
               </div>
             </div>
-            <p className="mt-2 text-center text-sm text-fuchsia-50">
-              Most cases submitted in {monthLabel}.
-            </p>
+            <p className="mt-2 text-center text-sm text-fuchsia-50">Most cases submitted in {monthLabel}.</p>
+            <div className="mt-3 flex justify-center">
+              <LeaderboardMonthPicker options={monthOptions} value={`${myYear}-${String(myMonth).padStart(2, "0")}`} />
+            </div>
 
             {leaderboard.length === 0 ? (
               <p className="mt-6 text-center text-sm text-fuchsia-50">
-                No cases submitted yet this month.
+                No cases submitted in {monthLabel}.
               </p>
             ) : (
               <>

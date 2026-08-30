@@ -129,6 +129,38 @@ export async function sendTelegramPhoto(
   }
 }
 
+/** Sends a file (e.g. a generated invoice PDF) as a Telegram document with an optional caption. */
+export async function sendTelegramDocument(
+  chatId: string,
+  fileBytes: Buffer,
+  filename: string,
+  caption?: string
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+
+  try {
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    if (caption) {
+      form.append("caption", caption);
+      form.append("parse_mode", "HTML");
+    }
+    form.append("document", new Blob([new Uint8Array(fileBytes)]), filename);
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error(`[telegram] sendDocument failed for chat ${chatId}:`, data.description);
+    }
+  } catch (err) {
+    console.error(`[telegram] sendDocument failed for chat ${chatId}:`, err);
+  }
+}
+
 /** Downloads a photo a staff member sent to the bot, by its file_id. */
 export async function getTelegramFileBytes(fileId: string): Promise<Buffer | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;

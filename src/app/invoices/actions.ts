@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireStaff } from "@/lib/auth";
-import { attachClaimInvoiceGrant, createClaimInvoice, deleteClaimInvoice } from "@/lib/claimInvoices";
-
-/** Every claim invoice goes through the same financier - no longer a per-invoice choice. */
-const FINANCIER = "ELK";
+import {
+  attachClaimInvoiceGrant,
+  CLAIM_INVOICE_FINANCIER,
+  createClaimInvoice,
+  deleteClaimInvoice,
+} from "@/lib/claimInvoices";
 
 export async function createInvoice(formData: FormData) {
   const { profile, supabase } = await requireStaff();
@@ -35,7 +37,7 @@ export async function createInvoice(formData: FormData) {
   const invoice = await createClaimInvoice(supabase, {
     invoiceDate,
     agentName: agentName || profile.full_name || "Staff",
-    financier: FINANCIER,
+    financier: CLAIM_INVOICE_FINANCIER,
     term,
     buyerName,
     buyerAddress,

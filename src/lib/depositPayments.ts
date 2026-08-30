@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { malaysiaYearMonth } from "@/lib/timezone";
 import {
   editTelegramMessageCaption,
   editTelegramMessageText,
@@ -42,6 +43,75 @@ export interface CarDepositRow {
 
 export interface CarDepositWithPayments extends CarDepositRow {
   payments: DepositPaymentRow[];
+}
+
+export interface MonthlyDepositSummaryRow {
+  paymentId: string;
+  plate: string;
+  vehicle: string;
+  amount: number;
+  method: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  approvedBy: string | null;
+}
+
+export interface MonthlyDepositSummary {
+  rows: MonthlyDepositSummaryRow[];
+  total: number;
+  carCount: number;
+  pendingCount: number;
+  byMethod: [string, number][];
+}
+
+/**
+ * Approved payments that landed in the given "YYYY-MM" month (bucketed by
+ * uploaded_at, i.e. when the customer actually paid, in Malaysia time) -
+ * shared by the on-page Monthly summary panel and the downloadable PDF so
+ * the two can never drift apart. Still-pending payments from the same
+ * month are only counted, not listed.
+ */
+export function summarizeApprovedDepositsForMonth(
+  deposits: { no_plate: string; vehicle: string; payments: DepositPaymentRow[] }[],
+  month: string
+): MonthlyDepositSummary {
+  const rows: MonthlyDepositSummaryRow[] = [];
+  let pendingCount = 0;
+
+  for (const d of deposits) {
+    for (const p of d.payments) {
+      if (!p.uploaded_at || malaysiaYearMonth(new Date(p.uploaded_at)) !== month) continue;
+      if (p.status === "approved") {
+        rows.push({
+          paymentId: p.id,
+          plate: d.no_plate,
+          vehicle: d.vehicle,
+          amount: p.amount,
+          method: p.method,
+          uploadedBy: p.uploaded_by_name,
+          uploadedAt: p.uploaded_at,
+          approvedBy: p.approved_by_name,
+        });
+      } else if (p.status === "pending") {
+        pendingCount += 1;
+      }
+    }
+  }
+  rows.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
+  const byMethod = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.method || "Not specified";
+    byMethod.set(key, (byMethod.get(key) ?? 0) + r.amount);
+  }
+
+  return {
+    rows,
+    total: rows.reduce((sum, r) => sum + r.amount, 0),
+    carCount: new Set(rows.map((r) => r.plate)).size,
+    pendingCount,
+    byMethod: [...byMethod.entries()].sort((a, b) => b[1] - a[1]),
+  };
 }
 
 /** Folder name for a car's receipts - e.g. "VAJ7259" - so all its payments land in one place, browsable by plate. */

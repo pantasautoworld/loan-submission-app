@@ -2,8 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
-import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { malaysiaDateParts, malaysiaYearMonth } from "@/lib/timezone";
+import {
+  summarizeApprovedDepositsForMonth,
+  type CarDepositRow,
+  type DepositPaymentRow,
+} from "@/lib/depositPayments";
+import { malaysiaDateParts } from "@/lib/timezone";
 import {
   approveDepositPayment,
   deleteDepositPayment,
@@ -94,55 +98,11 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [summaryMonth, setSummaryMonth] = useState(monthOptions[0].value);
 
-  // Approved payments that landed in the selected month (by uploaded_at, i.e. when the
-  // customer actually paid) - rejected/other-status payments are excluded from the total,
-  // still-pending ones from the same month are only counted, not listed.
-  const monthlySummary = useMemo(() => {
-    const rows: {
-      paymentId: string;
-      plate: string;
-      vehicle: string;
-      amount: number;
-      method: string;
-      uploadedAt: string;
-      uploadedBy: string;
-    }[] = [];
-    let pendingCount = 0;
-
-    for (const d of deposits) {
-      for (const p of d.payments) {
-        if (!p.uploaded_at || malaysiaYearMonth(new Date(p.uploaded_at)) !== summaryMonth) continue;
-        if (p.status === "approved") {
-          rows.push({
-            paymentId: p.id,
-            plate: d.no_plate,
-            vehicle: d.vehicle,
-            amount: p.amount,
-            method: p.method,
-            uploadedAt: p.uploaded_at,
-            uploadedBy: p.uploaded_by_name,
-          });
-        } else if (p.status === "pending") {
-          pendingCount += 1;
-        }
-      }
-    }
-    rows.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
-
-    const byMethod = new Map<string, number>();
-    for (const r of rows) {
-      const key = r.method || "Not specified";
-      byMethod.set(key, (byMethod.get(key) ?? 0) + r.amount);
-    }
-
-    return {
-      rows,
-      total: rows.reduce((sum, r) => sum + r.amount, 0),
-      carCount: new Set(rows.map((r) => r.plate)).size,
-      pendingCount,
-      byMethod: [...byMethod.entries()].sort((a, b) => b[1] - a[1]),
-    };
-  }, [deposits, summaryMonth]);
+  // Shared with the downloadable PDF (see /api/deposits/summary-pdf) so the two never drift apart.
+  const monthlySummary = useMemo(
+    () => summarizeApprovedDepositsForMonth(deposits, summaryMonth),
+    [deposits, summaryMonth]
+  );
 
   async function handleDelete(payment: PaymentWithUrl) {
     if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
@@ -200,17 +160,27 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
         <div className="mb-4 rounded-[10px] border border-line bg-panel p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-display text-base font-semibold text-fg">Monthly summary</h3>
-            <select
-              value={summaryMonth}
-              onChange={(e) => setSummaryMonth(e.target.value)}
-              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-            >
-              {monthOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={summaryMonth}
+                onChange={(e) => setSummaryMonth(e.target.value)}
+                className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+              >
+                {monthOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <a
+                href={`/api/deposits/summary-pdf?month=${summaryMonth}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-sm text-fg hover:border-amber"
+              >
+                Download PDF
+              </a>
+            </div>
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -259,7 +229,8 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                   <div className="text-right text-xs text-muted">
                     <span className="font-mono text-sm font-semibold text-fg">{fmtMoney(r.amount)}</span>
                     <span className="ml-2">
-                      {r.method || "—"} · {fmtDate(r.uploadedAt)} · {r.uploadedBy}
+                      {r.method || "—"} · {fmtDate(r.uploadedAt)} · Submitted by {r.uploadedBy}
+                      {r.approvedBy ? ` · Approved by ${r.approvedBy}` : ""}
                     </span>
                   </div>
                 </div>

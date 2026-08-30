@@ -210,7 +210,11 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
       )}
 
       {addingDeposit && (
-        <AddDepositModal onClose={() => setAddingDeposit(false)} onSaved={() => setAddingDeposit(false)} />
+        <AddDepositModal
+          vehicles={vehicles}
+          onClose={() => setAddingDeposit(false)}
+          onSaved={() => setAddingDeposit(false)}
+        />
       )}
     </div>
   );

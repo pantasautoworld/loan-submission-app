@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { logDepositPaymentByPlate } from "@/app/deposits/actions";
 import { DEPOSIT_METHODS, type DepositMethod } from "@/lib/depositPayments";
+import type { StockBoardVehicle } from "@/lib/stockBoard";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
 const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted";
 
 interface Props {
+  vehicles: StockBoardVehicle[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 /** The standalone "+ Add deposit" entry point - staff type the plate directly, looked up server-side. */
-export function AddDepositModal({ onClose, onSaved }: Props) {
+export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
   const [plate, setPlate] = useState("");
   const [note, setNote] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
@@ -67,7 +69,16 @@ export function AddDepositModal({ onClose, onSaved }: Props) {
           value={plate}
           onChange={(e) => setPlate(e.target.value)}
           placeholder="e.g. VAJ7259"
+          list="deposit-plate-options"
+          autoComplete="off"
         />
+        <datalist id="deposit-plate-options">
+          {vehicles.map((v) => (
+            <option key={v.id} value={v.vin}>
+              {v.vehicle}
+            </option>
+          ))}
+        </datalist>
 
         <label className={LABEL}>Deposit method</label>
         <select

@@ -311,16 +311,15 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                       <div className="inline-flex w-fit items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3.5 py-1 font-mono text-base font-bold tracking-wide text-[#14171a]">
                         {v.vin}
                       </div>
-                      {PUSPAKOM_TYPES.map((type) => (
-                        <span
-                          key={type}
-                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
-                            puspakomCompleted.has(v.id) ? "border-success text-success" : "border-line text-muted"
-                          }`}
-                        >
-                          {puspakomCompleted.has(v.id) ? `✅ ${type}` : type}
-                        </span>
-                      ))}
+                      {puspakomCompleted.has(v.id) &&
+                        PUSPAKOM_TYPES.map((type) => (
+                          <span
+                            key={type}
+                            className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success"
+                          >
+                            ✅ {type}
+                          </span>
+                        ))}
                     </div>
                   )}
                   <div className="font-display mb-1 text-base font-semibold text-fg">{v.vehicle}</div>

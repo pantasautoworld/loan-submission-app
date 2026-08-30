@@ -7,23 +7,14 @@ import { DepositPaymentApp } from "@/components/deposits/DepositPaymentApp";
 export default async function DepositsPage() {
   const { profile, supabase } = await requireStaff();
 
-  const [vehicles, deposits] = await Promise.all([
+  const [allVehicles, deposits] = await Promise.all([
     fetchStockBoardVehicles(),
     fetchCarDeposits(supabase),
   ]);
-  // Keep showing a car after its first payment moves it to "deposit_paid" - staff still
-  // need to log further payments (e.g. balance) against it, not just the very first one.
-  // Also keep showing any car manually added below (see addDepositCar), even if its
-  // Stock Board status is neither of those - once tracking starts, don't hide it.
-  const trackedVehicleIds = new Set(deposits.map((d) => d.stock_board_vehicle_id));
-  const approvedCars = vehicles.filter(
-    (v) => v.status === "reserved" || v.status === "deposit_paid" || trackedVehicleIds.has(v.id)
-  );
-  // Candidates for the "+ Add car" picker - cars not yet Loan Approved but where staff may
-  // still want to start collecting a deposit early, and not already being tracked.
-  const addableCars = vehicles.filter(
-    (v) => (v.status === "prep" || v.status === "available") && !trackedVehicleIds.has(v.id)
-  );
+  // Sold cars are excluded entirely - not addable, not searchable for deposit purposes.
+  // Everything else (approved/tracked/default-view logic) is computed client-side in
+  // DepositPaymentApp, since it needs to react live to what staff type into search.
+  const vehicles = allVehicles.filter((v) => v.status !== "sold");
 
   const depositsWithReceiptUrls = await Promise.all(
     deposits.map(async (d) => ({
@@ -43,8 +34,7 @@ export default async function DepositsPage() {
       <DepositPaymentApp
         staffName={profile.full_name}
         role={profile.role}
-        approvedCars={approvedCars}
-        addableCars={addableCars}
+        vehicles={vehicles}
         deposits={depositsWithReceiptUrls}
       />
     </>

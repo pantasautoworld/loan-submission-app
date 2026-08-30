@@ -12,8 +12,8 @@ type DepositWithUrls = CarDepositRow & { payments: PaymentWithUrl[] };
 interface Props {
   staffName: string;
   role: string;
-  approvedCars: StockBoardVehicle[];
-  addableCars: StockBoardVehicle[];
+  /** Every non-sold Stock Board car - filtered/searched client-side against `deposits`. */
+  vehicles: StockBoardVehicle[];
   deposits: DepositWithUrls[];
 }
 
@@ -28,6 +28,10 @@ function fmtDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function normalizePlate(s: string): string {
+  return s.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -66,7 +70,7 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
   );
 }
 
-export function DepositPaymentApp({ role, approvedCars, addableCars, deposits }: Props) {
+export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -85,13 +89,12 @@ export function DepositPaymentApp({ role, approvedCars, addableCars, deposits }:
     }
   }
 
-  async function handleAddCar(vehicleId: string) {
-    const car = addableCars.find((c) => c.id === vehicleId);
-    if (!car) return;
+  async function handleAddCar(car: StockBoardVehicle) {
     setAddError(null);
     setIsAdding(true);
     try {
       await addDepositCar(car.id, car.vin, car.vehicle);
+      setModalCar(car); // jump straight into logging its first payment
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Could not add that car.");
     } finally {
@@ -99,52 +102,59 @@ export function DepositPaymentApp({ role, approvedCars, addableCars, deposits }:
     }
   }
 
+  const trackedIds = new Set(deposits.map((d) => d.stock_board_vehicle_id));
+  const approvedIds = new Set(
+    deposits.filter((d) => d.payments.some((p) => p.status === "approved")).map((d) => d.stock_board_vehicle_id)
+  );
+
   const q = search.trim().toLowerCase();
-  const filteredCars = q
-    ? approvedCars.filter((car) => `${car.vin} ${car.vehicle}`.toLowerCase().includes(q))
-    : approvedCars;
+  // Resting state: only cars with at least one approved deposit payment. Searching
+  // widens this to any *tracked* car (approved or not) matching the query, so staff
+  // can still find and manage one that's still pending approval.
+  const displayedCars = q
+    ? vehicles.filter((v) => trackedIds.has(v.id) && `${v.vin} ${v.vehicle}`.toLowerCase().includes(q))
+    : vehicles.filter((v) => approvedIds.has(v.id));
+
+  // An exact plate match that isn't tracked yet - offered as a one-tap "add this" prompt.
+  const addSuggestion = q
+    ? vehicles.find((v) => !trackedIds.has(v.id) && normalizePlate(v.vin) === normalizePlate(search))
+    : undefined;
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <div className="mb-4 flex flex-wrap items-center gap-2.5">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search number plate…"
-          className="max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-        />
-        <div className="flex-1" />
-        <select
-          value=""
-          onChange={(e) => e.target.value && handleAddCar(e.target.value)}
-          disabled={isAdding || addableCars.length === 0}
-          className="max-w-[260px] rounded-[7px] bg-amber px-3 py-1.5 text-sm font-semibold text-amber-fg outline-none hover:brightness-110 disabled:opacity-50"
-        >
-          <option value="">
-            {isAdding
-              ? "Adding…"
-              : addableCars.length === 0
-                ? "+ Add car (none available)"
-                : "+ Add car for deposit…"}
-          </option>
-          {addableCars.map((car) => (
-            <option key={car.id} value={car.id}>
-              {car.vin} - {car.vehicle}
-            </option>
-          ))}
-        </select>
-      </div>
-      {addError && <p className="-mt-2 mb-4 text-xs text-danger">{addError}</p>}
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search or add plate…"
+        className="mb-4 max-w-[280px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+      />
 
-      {filteredCars.length === 0 ? (
+      {addSuggestion && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[7px] border border-dashed border-amber bg-panel-raised px-3 py-2.5">
+          <span className="text-sm text-fg">
+            <span className="font-mono font-semibold">{addSuggestion.vin}</span> — {addSuggestion.vehicle} isn&apos;t
+            tracked yet.
+          </span>
+          <button
+            onClick={() => handleAddCar(addSuggestion)}
+            disabled={isAdding}
+            className="whitespace-nowrap rounded-[7px] bg-amber px-3 py-1.5 text-xs font-semibold text-amber-fg hover:brightness-110 disabled:opacity-50"
+          >
+            {isAdding ? "Adding…" : "+ Add for deposit"}
+          </button>
+        </div>
+      )}
+      {addError && <p className="mb-4 text-xs text-danger">{addError}</p>}
+
+      {displayedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          {approvedCars.length === 0
-            ? "No cars are currently Loan Approved."
-            : "No Loan Approved car matches that plate."}
+          {q
+            ? "No tracked car matches that plate - add it above if it's a real car on the Stock Board."
+            : "No deposits approved yet."}
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredCars.map((car) => {
+          {displayedCars.map((car) => {
             const deposit = deposits.find((d) => d.stock_board_vehicle_id === car.id);
             const payments = deposit?.payments ?? [];
             const collected = payments

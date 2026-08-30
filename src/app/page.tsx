@@ -4,12 +4,7 @@ import { TopNav } from "@/components/TopNav";
 import { LeaderboardMonthPicker } from "@/components/LeaderboardMonthPicker";
 import { initialsOf, avatarColor } from "@/lib/avatar";
 import { malaysiaDateParts, malaysiaMonthStartIso } from "@/lib/timezone";
-
-interface LeaderboardEntry {
-  name: string;
-  count: number;
-  photoUrl: string | null;
-}
+import { fetchLeaderboardData, type LeaderboardEntry } from "@/lib/leaderboard";
 
 function Avatar({
   entry,
@@ -133,35 +128,10 @@ export default async function HomePage({
     };
   });
 
-  // Counts submissions the admin has actually marked "Submitted" (to the
-  // credit company) that month - not just generated - credited to the staff
-  // who originally created it.
-  const { data: generatedSubs } = await supabase
-    .from("submissions")
-    .select("created_by, profiles:created_by(full_name, avatar_path)")
-    .not("submitted_at", "is", null)
-    .gte("submitted_at", monthStart)
-    .lt("submitted_at", monthEnd);
-
-  const counts = new Map<string, LeaderboardEntry>();
-  for (const s of generatedSubs ?? []) {
-    if (!s.created_by) continue;
-    const profileRow = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
-    const row = profileRow as { full_name: string; avatar_path: string | null } | null;
-    const photoUrl = row?.avatar_path
-      ? supabase.storage.from("staff-photos").getPublicUrl(row.avatar_path).data.publicUrl
-      : null;
-    const entry = counts.get(s.created_by) ?? {
-      name: row?.full_name || "Unknown",
-      count: 0,
-      photoUrl,
-    };
-    entry.count += 1;
-    counts.set(s.created_by, entry);
-  }
-  const leaderboard = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+  const { leaderboard } = await fetchLeaderboardData(supabase, monthStart, monthEnd);
   const [first, second, third] = leaderboard;
   const rest = leaderboard.slice(3);
+  const summaryMonthValue = `${myYear}-${String(myMonth).padStart(2, "0")}`;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -388,8 +358,16 @@ export default async function HomePage({
               </div>
             </div>
             <p className="mt-2 text-center text-sm text-fuchsia-50">Most cases submitted in {monthLabel}.</p>
-            <div className="mt-3 flex justify-center">
-              <LeaderboardMonthPicker options={monthOptions} value={`${myYear}-${String(myMonth).padStart(2, "0")}`} />
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <LeaderboardMonthPicker options={monthOptions} value={summaryMonthValue} />
+              <a
+                href={`/api/leaderboard/summary-pdf?month=${summaryMonthValue}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-white"
+              >
+                Download PDF
+              </a>
             </div>
 
             {leaderboard.length === 0 ? (

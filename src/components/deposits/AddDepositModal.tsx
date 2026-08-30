@@ -7,6 +7,8 @@ import type { StockBoardVehicle } from "@/lib/stockBoard";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
+const FIELD_NO_MB =
+  "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber";
 const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted";
 
 interface Props {
@@ -18,6 +20,7 @@ interface Props {
 /** The standalone "+ Add deposit" entry point - staff type the plate directly, looked up server-side. */
 export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
   const [plate, setPlate] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [note, setNote] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [method, setMethod] = useState<DepositMethod | "">("");
@@ -25,6 +28,16 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  function handleSelectPlate(v: StockBoardVehicle) {
+    setPlate(v.vin);
+    setShowSuggestions(false);
+  }
+
+  const plateQuery = plate.trim().toLowerCase();
+  const suggestions = plateQuery
+    ? vehicles.filter((v) => v.vin.toLowerCase().includes(plateQuery))
+    : vehicles;
 
   async function handleSave() {
     if (!plate.trim()) {
@@ -64,21 +77,36 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
         <h3 className="font-display mb-4 text-lg font-semibold text-fg">Add deposit</h3>
 
         <label className={LABEL}>No Plate</label>
-        <input
-          className={FIELD}
-          value={plate}
-          onChange={(e) => setPlate(e.target.value)}
-          placeholder="e.g. VAJ7259"
-          list="deposit-plate-options"
-          autoComplete="off"
-        />
-        <datalist id="deposit-plate-options">
-          {vehicles.map((v) => (
-            <option key={v.id} value={v.vin}>
-              {v.vehicle}
-            </option>
-          ))}
-        </datalist>
+        <div className="relative mb-3">
+          <input
+            className={FIELD_NO_MB}
+            value={plate}
+            onChange={(e) => {
+              setPlate(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="e.g. VAJ7259"
+            autoComplete="off"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-[7px] border border-line bg-panel-raised shadow-lg">
+              {suggestions.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelectPlate(v)}
+                  className="block w-full px-2.5 py-1.5 text-left text-sm hover:bg-panel"
+                >
+                  <span className="font-mono font-semibold text-fg">{v.vin}</span>
+                  <span className="ml-2 text-xs text-muted">{v.vehicle}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <label className={LABEL}>Deposit method</label>
         <select

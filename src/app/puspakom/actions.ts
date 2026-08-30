@@ -6,8 +6,6 @@ import {
   createPuspakomBooking,
   deletePuspakomBooking,
   markPuspakomBookingComplete,
-  PUSPAKOM_TYPES,
-  type PuspakomType,
 } from "@/lib/puspakomBookings";
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
@@ -17,10 +15,8 @@ export async function logPuspakomBooking(formData: FormData) {
   const plate = String(formData.get("plate") ?? "").trim();
   const branch = String(formData.get("branch") ?? "").trim();
   const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
-  const inspectionType = String(formData.get("inspectionType") ?? "");
   if (!plate) throw new Error("Enter a plate number.");
   if (!appointmentDate) throw new Error("Pick an appointment date.");
-  if (!PUSPAKOM_TYPES.includes(inspectionType as PuspakomType)) throw new Error("Select an inspection type.");
 
   const vehicles = await fetchStockBoardVehicles();
   const vehicle = findByPlate(plate, vehicles);
@@ -33,7 +29,6 @@ export async function logPuspakomBooking(formData: FormData) {
     vehicle: vehicle.vehicle,
     branch,
     appointmentDate,
-    inspectionType: inspectionType as PuspakomType,
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });

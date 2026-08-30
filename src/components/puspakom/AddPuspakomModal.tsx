@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { logPuspakomBooking } from "@/app/puspakom/actions";
 import { malaysiaTodayIso } from "@/lib/timezone";
-import { PUSPAKOM_TYPES, type PuspakomType } from "@/lib/puspakomBookings";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 
 const FIELD =
@@ -23,7 +22,6 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [branch, setBranch] = useState("");
   const [appointmentDate, setAppointmentDate] = useState(malaysiaTodayIso());
-  const [inspectionType, setInspectionType] = useState<PuspakomType | "">("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -46,10 +44,6 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
       setError("Pick an appointment date.");
       return;
     }
-    if (!inspectionType) {
-      setError("Select an inspection type.");
-      return;
-    }
     setError(null);
     setIsSaving(true);
     try {
@@ -57,7 +51,6 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
       formData.set("plate", plate.trim());
       formData.set("branch", branch.trim());
       formData.set("appointmentDate", appointmentDate);
-      formData.set("inspectionType", inspectionType);
       await logPuspakomBooking(formData);
       onSaved();
     } catch (err) {
@@ -102,20 +95,6 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
             </div>
           )}
         </div>
-
-        <label className={LABEL}>Inspection type</label>
-        <select
-          className={FIELD}
-          value={inspectionType}
-          onChange={(e) => setInspectionType(e.target.value as PuspakomType | "")}
-        >
-          <option value="">Select type…</option>
-          {PUSPAKOM_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
 
         <label className={LABEL}>Puspakom branch</label>
         <input

@@ -7,7 +7,7 @@ import {
   refreshStockBoardVehicles,
   type StockBoardVehicle,
 } from "@/lib/stockBoard";
-import type { PuspakomType } from "@/lib/puspakomBookings";
+import { PUSPAKOM_TYPES } from "@/lib/puspakomBookings";
 import { CarModal } from "./CarModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -29,8 +29,8 @@ interface Props {
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
   depositTotals: Record<string, number>;
-  /** Completed inspection type(s) per Stock Board vehicle id - shows a ✅ B5 / ✅ B7 tag beside the plate. */
-  puspakomCompletedTypes: Record<string, PuspakomType[]>;
+  /** Vehicle ids with at least one completed Puspakom booking - B5 and B7 are done together, so both tags show as a pair. */
+  puspakomCompletedIds: string[];
 }
 
 function fmtMoney(n: string | number | undefined): string {
@@ -68,7 +68,8 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedTypes }: Props) {
+export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedIds }: Props) {
+  const puspakomCompleted = useMemo(() => new Set(puspakomCompletedIds), [puspakomCompletedIds]);
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -310,12 +311,14 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                       <div className="inline-flex w-fit items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3.5 py-1 font-mono text-base font-bold tracking-wide text-[#14171a]">
                         {v.vin}
                       </div>
-                      {(puspakomCompletedTypes[v.id] ?? []).map((type) => (
+                      {PUSPAKOM_TYPES.map((type) => (
                         <span
                           key={type}
-                          className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success"
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                            puspakomCompleted.has(v.id) ? "border-success text-success" : "border-line text-muted"
+                          }`}
                         >
-                          ✅ {type}
+                          {puspakomCompleted.has(v.id) ? `✅ ${type}` : type}
                         </span>
                       ))}
                     </div>

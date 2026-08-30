@@ -248,18 +248,6 @@ export async function recordDepositPayment(
   return { payment: finalPayment as DepositPaymentRow, carDepositId: carDeposit.id };
 }
 
-/** How many payments for this car have been approved - used to detect "this was the first one". */
-export async function countApprovedPayments(carDepositId: string): Promise<number> {
-  const admin = createAdminClient();
-  const { count, error } = await admin
-    .from("car_deposit_payments")
-    .select("id", { count: "exact", head: true })
-    .eq("car_deposit_id", carDepositId)
-    .eq("status", "approved");
-  if (error) throw new Error(error.message);
-  return count ?? 0;
-}
-
 /**
  * Resolves a pending payment (Telegram Approve/Reject tap). The extra
  * `.eq("status", "pending")` makes this idempotent - a double-tap or a

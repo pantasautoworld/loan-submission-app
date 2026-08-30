@@ -13,14 +13,12 @@ const STATUS_LABEL: Record<string, string> = {
   prep: "Loan Submission",
   available: "Available",
   reserved: "Loan Approved",
-  deposit_paid: "Deposit Received",
   sold: "Sold",
 };
 const STATUS_BG: Record<string, string> = {
   prep: "bg-status-prep",
   available: "bg-status-available",
   reserved: "bg-status-reserved",
-  deposit_paid: "bg-status-deposit-paid",
   sold: "bg-status-sold",
 };
 
@@ -118,7 +116,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
   }, [vehicles]);
 
   const stats = useMemo(() => {
-    const s = { prep: 0, available: 0, reserved: 0, deposit_paid: 0, sold: 0 };
+    const s = { prep: 0, available: 0, reserved: 0, sold: 0 };
     vehicles.forEach((v) => {
       if (v.status in s) s[v.status as keyof typeof s]++;
     });
@@ -181,12 +179,11 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
   const statCards = [
     {
       label: "Total stock",
-      value: stats.available + stats.reserved + stats.deposit_paid + stats.prep,
+      value: stats.available + stats.reserved + stats.prep,
       key: "",
     },
     { label: "Available", value: stats.available, key: "available" },
     { label: "Loan approved", value: stats.reserved, key: "reserved" },
-    { label: "Deposit received", value: stats.deposit_paid, key: "deposit_paid" },
     { label: "Loan submission", value: stats.prep, key: "prep" },
     { label: "Sold", value: stats.sold, key: "sold" },
   ];
@@ -269,6 +266,10 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
             const aging = v.status === "reserved" && v.approvalDate ? agingInfo(v.approvalDate) : null;
             const showSubmittedBy =
               (v.status === "prep" || v.status === "reserved" || v.status === "sold") && v.submittedBy;
+            const depositRequired = Number(v.deposit) || 0;
+            const depositCollected = depositTotals[v.id] ?? 0;
+            const depositFullyPaid = depositRequired > 0 && depositCollected >= depositRequired;
+            const depositPending = depositRequired > 0 && !depositFullyPaid;
 
             return (
               <div key={v.id} className="flex flex-col overflow-hidden rounded-[10px] border border-line bg-panel">
@@ -295,6 +296,16 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
                     >
                       {STATUS_LABEL[v.status] ?? v.status}
                     </span>
+                    {depositFullyPaid && (
+                      <span className="rounded-full border border-status-deposit-paid px-2.5 py-0.5 text-[11px] font-semibold text-status-deposit-paid">
+                        Fully deposited
+                      </span>
+                    )}
+                    {depositPending && (
+                      <span className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber">
+                        Deposit pending
+                      </span>
+                    )}
                     {v.company && (
                       <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted">
                         {v.company}

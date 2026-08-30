@@ -293,37 +293,6 @@ export async function markLoanApproved(
   return { ok: true, vehicle: { ...merged, _key: match._key } };
 }
 
-/**
- * Flips a car from "reserved" (Loan Approved) to "deposit_paid" (Deposit
- * Received) once its first deposit payment is approved on Telegram. Only
- * acts while the car is still "reserved" - if it's already moved on
- * (deposit_paid, sold, or edited back to something else), this is a no-op
- * so a later payment approval never reverts a further-along status.
- */
-export async function markDepositReceived(
-  vehicleId: string,
-  actorName: string
-): Promise<{ ok: true; vehicle: StockBoardVehicle } | { ok: false; reason: string }> {
-  const vehicles = await refreshStockBoardVehicles();
-  const match = findById(vehicleId, vehicles);
-  if (!match) return { ok: false, reason: "Car not found on the Stock Board." };
-  if (match.status !== "reserved") {
-    return { ok: false, reason: `Car is not Loan Approved (currently "${match.status}") - left it alone.` };
-  }
-
-  const now = new Date().toISOString();
-  const merged: Omit<StockBoardVehicle, "_key"> = {
-    ...stripKey(match),
-    status: "deposit_paid",
-    updatedBy: actorName,
-    updatedAt: now,
-  };
-  const nextList = vehicles.map((v) => (v.id === match.id ? merged : stripKey(v)));
-  await writeBoardData(nextList, `deposit received for ${match.vehicle}`, actorName);
-  cache = null;
-  return { ok: true, vehicle: { ...merged, _key: match._key } };
-}
-
 function photoUrl(id: string): string {
   return `${FIREBASE_DB_URL}/${FB_ROOT}/${encodeURIComponent("photo:" + id)}.json`;
 }

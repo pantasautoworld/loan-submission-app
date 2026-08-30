@@ -22,7 +22,6 @@ const STATUS_OPTIONS: { value: StockBoardVehicle["status"]; label: string }[] = 
   { value: "prep", label: "Loan Submission" },
   { value: "available", label: "Available" },
   { value: "reserved", label: "Loan Approved" },
-  { value: "deposit_paid", label: "Deposit Received" },
   { value: "sold", label: "Sold" },
 ];
 

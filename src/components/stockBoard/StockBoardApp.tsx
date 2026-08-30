@@ -141,7 +141,8 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
         const collected = depositTotals[v.id] ?? 0;
         const fullyPaid = collected >= required;
         if (depositFilter === "fully_paid" && !fullyPaid) return false;
-        if (depositFilter === "pending" && fullyPaid) return false;
+        // "Pending" matches the card's tag - only once a first payment has landed.
+        if (depositFilter === "pending" && (fullyPaid || collected <= 0)) return false;
       }
       if (!q) return true;
       return `${v.vehicle} ${v.vin}`.toLowerCase().includes(q);
@@ -286,7 +287,9 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
             const depositRequired = Number(v.deposit) || 0;
             const depositCollected = depositTotals[v.id] ?? 0;
             const depositFullyPaid = depositRequired > 0 && depositCollected >= depositRequired;
-            const depositPending = depositRequired > 0 && !depositFullyPaid;
+            // Only shown once the first payment has actually landed - a car that
+            // simply has a deposit requirement set with nothing paid yet stays tag-free.
+            const depositPending = depositRequired > 0 && depositCollected > 0 && !depositFullyPaid;
 
             return (
               <div key={v.id} className="flex flex-col overflow-hidden rounded-[10px] border border-line bg-panel">

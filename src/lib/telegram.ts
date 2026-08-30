@@ -25,6 +25,65 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
   }
 }
 
+/** Like sendTelegramMessage, but with inline buttons and returns the sent message's id (needed to edit it later) - for a deposit payment logged with no receipt. */
+export async function sendTelegramMessageWithKeyboard(
+  chatId: string,
+  text: string,
+  replyMarkup: InlineKeyboard
+): Promise<number | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: replyMarkup },
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      console.error(`[telegram] sendMessage (keyboard) failed for chat ${chatId}:`, data.description);
+      return null;
+    }
+    return data.result.message_id as number;
+  } catch (err) {
+    console.error(`[telegram] sendMessage (keyboard) failed for chat ${chatId}:`, err);
+    return null;
+  }
+}
+
+/** Updates a previously-sent plain text message - the receipt-less counterpart to editTelegramMessageCaption. */
+export async function editTelegramMessageText(
+  chatId: string,
+  messageId: number,
+  text: string,
+  replyMarkup?: InlineKeyboard
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: replyMarkup ?? [] },
+      }),
+    });
+  } catch (err) {
+    console.error(`[telegram] editMessageText failed for chat ${chatId}:`, err);
+  }
+}
+
 /** The same allowlist notifyTelegram broadcasts to - reused by the webhook to authorize inbound senders. */
 export function telegramChatAllowlist(): string[] {
   return (process.env.TELEGRAM_CHAT_IDS ?? "")

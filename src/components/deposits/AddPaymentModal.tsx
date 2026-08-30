@@ -31,10 +31,6 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       setError("Enter a valid amount.");
       return;
     }
-    if (!file) {
-      setError("A receipt is required.");
-      return;
-    }
     if (!method) {
       setError("Select a deposit method.");
       return;
@@ -50,7 +46,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       formData.set("receiptNumber", receiptNumber.trim());
       formData.set("method", method);
       formData.set("amount", amount);
-      formData.set("receipt", file);
+      if (file) formData.set("receipt", file);
       await logDepositPayment(formData);
       onSaved();
     } catch (err) {
@@ -89,7 +85,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
           onChange={(e) => setAmount(e.target.value)}
         />
 
-        <label className={LABEL}>Receipt</label>
+        <label className={LABEL}>Receipt (if have)</label>
         <input
           type="file"
           accept="image/*,.pdf"

@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { findByPlate, fetchStockBoardVehicles, markLoanApproved } from "@/lib/stockBoard";
 import {
   answerTelegramCallbackQuery,
-  editTelegramMessageCaption,
   getTelegramFileBytes,
   notifyTelegram,
   sendTelegramMessage,
   telegramChatAllowlist,
 } from "@/lib/telegram";
-import { buildDepositCaption, recordDepositPayment, resolveDepositPayment } from "@/lib/depositPayments";
+import {
+  buildDepositCaption,
+  editDepositTelegramMessage,
+  recordDepositPayment,
+  resolveDepositPayment,
+} from "@/lib/depositPayments";
 
 // Every real approval note already starts "RM<deposit> ELK-DESA <PLATE> <name>..."
 // (both with and without a dash before the name) - anchoring on "ELK-DESA" doubles
@@ -218,7 +222,7 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
   // Update every admin's copy of the message, not just the one who tapped -
   // otherwise the other admins are left looking at stale Approve/Reject buttons.
   await Promise.all(
-    resolved.payment.telegram_messages.map((tm) => editTelegramMessageCaption(tm.chat_id, tm.message_id, caption))
+    resolved.payment.telegram_messages.map((tm) => editDepositTelegramMessage(tm, caption))
   );
 
   await notifyTelegram(

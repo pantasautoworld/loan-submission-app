@@ -24,12 +24,12 @@ export async function logDepositPayment(formData: FormData) {
 
   if (!stockBoardVehicleId || !noPlate) throw new Error("Missing car reference.");
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount.");
-  if (!file || file.size === 0) throw new Error("A receipt file is required.");
   if (!DEPOSIT_METHODS.includes(methodRaw as DepositMethod)) throw new Error("Select a deposit method.");
   const method = methodRaw as DepositMethod;
 
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const hasReceipt = !!file && file.size > 0;
+  const bytes = hasReceipt ? Buffer.from(await file!.arrayBuffer()) : null;
+  const ext = hasReceipt ? (file!.name.split(".").pop() || "jpg").toLowerCase() : null;
 
   await recordDepositPayment({
     stockBoardVehicleId,

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   editTelegramMessageCaption,
+  editTelegramMessageText,
+  sendTelegramMessageWithKeyboard,
   sendTelegramPhoto,
   telegramChatAllowlist,
   type InlineKeyboard,
@@ -25,7 +27,7 @@ export interface DepositPaymentRow {
   uploaded_at: string;
   approved_by_name: string | null;
   approved_at: string | null;
-  telegram_messages: { chat_id: string; message_id: number }[];
+  telegram_messages: { chat_id: string; message_id: number; has_photo: boolean }[];
 }
 
 export interface CarDepositRow {
@@ -69,6 +71,18 @@ export function buildDepositCaption(input: {
   );
 }
 
+/** Edits one previously-sent Telegram message, using the right endpoint depending on whether it was a photo or plain text. */
+export async function editDepositTelegramMessage(
+  message: { chat_id: string; message_id: number; has_photo: boolean },
+  text: string
+): Promise<void> {
+  if (message.has_photo) {
+    await editTelegramMessageCaption(message.chat_id, message.message_id, text);
+  } else {
+    await editTelegramMessageText(message.chat_id, message.message_id, text);
+  }
+}
+
 /** Every car_deposits row plus its payments, joined in-memory (small tables, simplest reliable option). */
 export async function fetchCarDeposits(supabase: SupabaseClient): Promise<CarDepositWithPayments[]> {
   const { data: deposits, error: depErr } = await supabase.from("car_deposits").select("*");
@@ -105,8 +119,8 @@ export interface RecordDepositPaymentInput {
   method: DepositMethod | "";
   receiptNumber: string;
   amount: number;
-  receiptBytes: Buffer;
-  receiptExt: string;
+  receiptBytes: Buffer | null;
+  receiptExt: string | null;
   uploadedByProfileId: string | null;
   uploadedByName: string;
   source: "app" | "telegram";
@@ -154,14 +168,18 @@ export async function recordDepositPayment(
     .single();
   if (insertErr || !payment) throw new Error(insertErr?.message ?? "Could not record payment");
 
-  const receiptPath = `deposits/${carDeposit.id}/${payment.id}.${input.receiptExt}`;
-  const { error: uploadErr } = await admin.storage
-    .from("submission-files")
-    .upload(receiptPath, input.receiptBytes, {
-      contentType: mimeFromExt(input.receiptExt),
-      upsert: true,
-    });
-  if (uploadErr) throw new Error(uploadErr.message);
+  const hasReceipt = !!input.receiptBytes && !!input.receiptExt;
+  let receiptPath: string | null = null;
+  if (hasReceipt) {
+    receiptPath = `deposits/${carDeposit.id}/${payment.id}.${input.receiptExt}`;
+    const { error: uploadErr } = await admin.storage
+      .from("submission-files")
+      .upload(receiptPath, input.receiptBytes!, {
+        contentType: mimeFromExt(input.receiptExt!),
+        upsert: true,
+      });
+    if (uploadErr) throw new Error(uploadErr.message);
+  }
 
   const caption = buildDepositCaption({
     vehicle: input.vehicle,
@@ -180,16 +198,12 @@ export async function recordDepositPayment(
     ],
   ];
 
-  const telegramMessages: { chat_id: string; message_id: number }[] = [];
+  const telegramMessages: { chat_id: string; message_id: number; has_photo: boolean }[] = [];
   for (const chatId of telegramChatAllowlist()) {
-    const messageId = await sendTelegramPhoto(
-      chatId,
-      input.receiptBytes,
-      `receipt.${input.receiptExt}`,
-      caption,
-      keyboard
-    );
-    if (messageId) telegramMessages.push({ chat_id: chatId, message_id: messageId });
+    const messageId = hasReceipt
+      ? await sendTelegramPhoto(chatId, input.receiptBytes!, `receipt.${input.receiptExt}`, caption, keyboard)
+      : await sendTelegramMessageWithKeyboard(chatId, caption, keyboard);
+    if (messageId) telegramMessages.push({ chat_id: chatId, message_id: messageId, has_photo: hasReceipt });
   }
 
   const { data: finalPayment, error: finalErr } = await admin
@@ -267,9 +281,7 @@ export async function removeDepositPayment(paymentId: string, actorName: string)
       receiptNumber: payment.receipt_number,
       uploadedByName: payment.uploaded_by_name,
     })}\n\n🗑 Deleted by ${actorName}`;
-    await Promise.all(
-      payment.telegram_messages.map((tm) => editTelegramMessageCaption(tm.chat_id, tm.message_id, caption))
-    );
+    await Promise.all(payment.telegram_messages.map((tm) => editDepositTelegramMessage(tm, caption)));
   }
 }
 

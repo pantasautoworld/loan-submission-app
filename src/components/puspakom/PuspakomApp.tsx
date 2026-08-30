@@ -1,148 +1,243 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { PuspakomBookingRow } from "@/lib/puspakomBookings";
 import { completePuspakomBooking, removePuspakomBooking } from "@/app/puspakom/actions";
+import { malaysiaDateParts, malaysiaTodayIso } from "@/lib/timezone";
 import { AddPuspakomModal } from "./AddPuspakomModal";
 
 interface Props {
   role: string;
-  /** Every non-sold Stock Board car - cross-referenced against `bookings` to render each tracked car's history. */
+  /** Every non-sold Stock Board car - passed through to the "+ Add booking" plate picker. */
   vehicles: StockBoardVehicle[];
   bookings: PuspakomBookingRow[];
 }
 
-function fmtDate(isoDate: string | null | undefined): string {
-  if (!isoDate) return "";
-  const d = new Date(isoDate + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Weeks of "YYYY-MM-DD" cells (null = padding outside the month) for a calendar grid - built in UTC to avoid local-timezone day drift. */
+function getMonthGrid(year: number, month: number): (string | null)[][] {
+  const startWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  scheduled: "border-line text-muted",
-  completed: "border-success text-success",
-};
-const STATUS_LABEL: Record<string, string> = {
-  scheduled: "Scheduled",
-  completed: "Completed",
-};
-
 export function PuspakomApp({ role, vehicles, bookings }: Props) {
+  const { year: todayYear, month: todayMonth } = malaysiaDateParts();
+  const todayIso = malaysiaTodayIso();
+
+  const [viewYear, setViewYear] = useState(todayYear);
+  const [viewMonth, setViewMonth] = useState(todayMonth);
   const [addingBooking, setAddingBooking] = useState(false);
-  const [completingId, setCompletingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<PuspakomBookingRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const bookingsByDate = useMemo(() => {
+    const map = new Map<string, PuspakomBookingRow[]>();
+    for (const b of bookings) {
+      const list = map.get(b.appointment_date) ?? [];
+      list.push(b);
+      map.set(b.appointment_date, list);
+    }
+    return map;
+  }, [bookings]);
+
+  const weeks = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
+  const monthLabel = new Date(Date.UTC(viewYear, viewMonth - 1, 1)).toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  function goToMonth(delta: number) {
+    const d = new Date(Date.UTC(viewYear, viewMonth - 1 + delta, 1));
+    setViewYear(d.getUTCFullYear());
+    setViewMonth(d.getUTCMonth() + 1);
+  }
 
   async function handleComplete(booking: PuspakomBookingRow) {
-    setCompletingId(booking.id);
+    setBusyId(booking.id);
     try {
       await completePuspakomBooking(booking.id);
+      setSelected(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not update - try again.");
     } finally {
-      setCompletingId(null);
+      setBusyId(null);
     }
   }
 
   async function handleDelete(booking: PuspakomBookingRow) {
     if (!confirm(`Delete this booking for ${booking.no_plate}? This cannot be undone.`)) return;
-    setDeletingId(booking.id);
+    setBusyId(booking.id);
     try {
       await removePuspakomBooking(booking.id);
+      setSelected(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not delete - try again.");
     } finally {
-      setDeletingId(null);
+      setBusyId(null);
     }
   }
 
-  // Every car with at least one booking logged - most recently booked first.
-  const trackedCars = vehicles
-    .filter((v) => bookings.some((b) => b.stock_board_vehicle_id === v.id))
-    .sort((a, b) => {
-      const latest = (id: string) =>
-        bookings
-          .filter((bk) => bk.stock_board_vehicle_id === id)
-          .reduce((max, bk) => (bk.created_at > max ? bk.created_at : max), "");
-      return latest(b.id).localeCompare(latest(a.id));
-    });
-
   return (
-    <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <div className="mb-4">
-        <button
-          onClick={() => setAddingBooking(true)}
-          className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
-        >
-          + Add booking
-        </button>
+    <div className="mx-auto max-w-[1100px] px-6 py-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => goToMonth(-1)}
+            className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-sm text-fg hover:border-amber"
+          >
+            ←
+          </button>
+          <h2 className="font-display min-w-[170px] text-center text-lg font-semibold text-fg">{monthLabel}</h2>
+          <button
+            onClick={() => goToMonth(1)}
+            className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-sm text-fg hover:border-amber"
+          >
+            →
+          </button>
+          <button
+            onClick={() => {
+              setViewYear(todayYear);
+              setViewMonth(todayMonth);
+            }}
+            className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-xs text-muted hover:border-amber"
+          >
+            Today
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="h-2.5 w-2.5 rounded-full bg-danger" /> Not yet inspected
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="h-2.5 w-2.5 rounded-full bg-success" /> Completed
+          </span>
+          <button
+            onClick={() => setAddingBooking(true)}
+            className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
+          >
+            + Add booking
+          </button>
+        </div>
       </div>
 
-      {trackedCars.length === 0 ? (
-        <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          No Puspakom bookings logged yet. Use &quot;+ Add booking&quot; to log one.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {trackedCars.map((car) => {
-            const carBookings = bookings
-              .filter((b) => b.stock_board_vehicle_id === car.id)
-              .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date));
-
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[10px] border border-line bg-line">
+        {WEEKDAY_LABELS.map((d) => (
+          <div
+            key={d}
+            className="bg-panel-raised px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted"
+          >
+            {d}
+          </div>
+        ))}
+        {weeks.flatMap((week, wi) =>
+          week.map((dateIso, di) => {
+            const dayBookings = dateIso ? (bookingsByDate.get(dateIso) ?? []) : [];
+            const isToday = dateIso === todayIso;
             return (
-              <div key={car.id} className="rounded-[10px] border border-line bg-panel p-5">
-                <div>
-                  <div className="mb-1 inline-flex w-fit items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3 py-0.5 font-mono text-sm font-bold tracking-wide text-[#14171a]">
-                    {car.vin}
-                  </div>
-                  <div className="font-display text-base font-semibold text-fg">{car.vehicle}</div>
-                </div>
-
-                <div className="mt-4 divide-y divide-line border-t border-line">
-                  {carBookings.map((b) => (
-                    <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
-                      <div>
-                        <span className="font-semibold text-fg">{fmtDate(b.appointment_date)}</span>
-                        {b.branch && <span className="ml-2 text-muted">{b.branch}</span>}
-                        <div className="text-[11px] text-muted">
-                          Booked by {b.created_by_name}
-                          {b.status === "completed" && b.completed_by_name
-                            ? ` · Completed by ${b.completed_by_name}`
-                            : ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[b.status] ?? "border-line text-muted"}`}
-                        >
-                          {STATUS_LABEL[b.status] ?? b.status}
-                        </span>
-                        {b.status === "scheduled" && (
-                          <button
-                            onClick={() => handleComplete(b)}
-                            disabled={completingId === b.id}
-                            className="text-xs text-success hover:underline disabled:opacity-50"
-                          >
-                            {completingId === b.id ? "…" : "Mark complete"}
-                          </button>
-                        )}
-                        {role === "admin" && (
-                          <button
-                            onClick={() => handleDelete(b)}
-                            disabled={deletingId === b.id}
-                            className="text-xs text-muted hover:text-danger hover:underline disabled:opacity-50"
-                          >
-                            {deletingId === b.id ? "Deleting…" : "Delete"}
-                          </button>
-                        )}
-                      </div>
+              <div key={`${wi}-${di}`} className={`min-h-[92px] p-1.5 ${dateIso ? "bg-panel" : "bg-panel/40"}`}>
+                {dateIso && (
+                  <>
+                    <div className={`mb-1 text-[11px] ${isToday ? "font-bold text-amber" : "text-muted"}`}>
+                      {Number(dateIso.slice(-2))}
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-1">
+                      {dayBookings.map((b) => (
+                        <button
+                          key={b.id}
+                          onClick={() => setSelected(b)}
+                          className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-semibold ${
+                            b.status === "completed" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
+                          }`}
+                        >
+                          {b.no_plate}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             );
-          })}
+          })
+        )}
+      </div>
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-5"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="w-full max-w-[380px] rounded-[10px] border border-line bg-panel p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 inline-flex items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3 py-0.5 font-mono text-sm font-bold tracking-wide text-[#14171a]">
+              {selected.no_plate}
+            </div>
+            <div className="font-display mt-2 text-base font-semibold text-fg">{selected.vehicle}</div>
+            <div className="mt-1 text-sm text-muted">
+              {new Date(selected.appointment_date + "T00:00:00").toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+              {selected.branch && ` · ${selected.branch}`}
+            </div>
+            <div className="mt-2 text-xs text-muted">
+              Booked by {selected.created_by_name}
+              {selected.status === "completed" && selected.completed_by_name
+                ? ` · Completed by ${selected.completed_by_name}`
+                : ""}
+            </div>
+            <span
+              className={`mt-3 inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                selected.status === "completed" ? "border-success text-success" : "border-danger text-danger"
+              }`}
+            >
+              {selected.status === "completed" ? "Completed" : "Not yet inspected"}
+            </span>
+
+            <div className="mt-4 flex justify-end gap-2.5">
+              <button
+                onClick={() => setSelected(null)}
+                className="rounded-[7px] border border-line bg-panel-raised px-4 py-2 text-sm text-fg hover:border-amber"
+              >
+                Close
+              </button>
+              {role === "admin" && (
+                <button
+                  onClick={() => handleDelete(selected)}
+                  disabled={busyId === selected.id}
+                  className="rounded-[7px] border border-line px-4 py-2 text-sm text-muted hover:border-danger hover:text-danger disabled:opacity-50"
+                >
+                  {busyId === selected.id ? "…" : "Delete"}
+                </button>
+              )}
+              {selected.status === "scheduled" && (
+                <button
+                  onClick={() => handleComplete(selected)}
+                  disabled={busyId === selected.id}
+                  className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110 disabled:opacity-50"
+                >
+                  {busyId === selected.id ? "…" : "Mark complete"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

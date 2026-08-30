@@ -66,16 +66,31 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
 
 export function DepositPaymentApp({ approvedCars, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
+  const [search, setSearch] = useState("");
+
+  const q = search.trim().toLowerCase();
+  const filteredCars = q
+    ? approvedCars.filter((car) => `${car.vin} ${car.vehicle}`.toLowerCase().includes(q))
+    : approvedCars;
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      {approvedCars.length === 0 ? (
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search number plate…"
+        className="mb-4 max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+      />
+
+      {filteredCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          No cars are currently Loan Approved.
+          {approvedCars.length === 0
+            ? "No cars are currently Loan Approved."
+            : "No Loan Approved car matches that plate."}
         </div>
       ) : (
         <div className="space-y-4">
-          {approvedCars.map((car) => {
+          {filteredCars.map((car) => {
             const deposit = deposits.find((d) => d.stock_board_vehicle_id === car.id);
             const payments = deposit?.payments ?? [];
             const collected = payments

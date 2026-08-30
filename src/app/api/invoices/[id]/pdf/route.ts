@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth";
 import { fetchClaimInvoice } from "@/lib/claimInvoices";
-import { buildInvoiceWorkbookBuffer } from "@/lib/pdf/buildInvoiceWorkbook";
-import { convertXlsxToPdf } from "@/lib/convertToPdf";
+import { buildClaimInvoicePdf } from "@/lib/pdf/claimInvoicePdf";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,8 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const invoice = await fetchClaimInvoice(supabase, id);
   if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-  const xlsxBuffer = await buildInvoiceWorkbookBuffer(invoice);
-  const pdfBytes = await convertXlsxToPdf(xlsxBuffer);
+  const pdfBytes = await buildClaimInvoicePdf(invoice);
 
   return new NextResponse(new Uint8Array(pdfBytes), {
     headers: {

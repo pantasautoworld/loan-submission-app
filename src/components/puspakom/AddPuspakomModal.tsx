@@ -21,13 +21,16 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
   const [plate, setPlate] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [branch, setBranch] = useState("");
+  const [company, setCompany] = useState("");
   const [appointmentDate, setAppointmentDate] = useState(malaysiaTodayIso());
+  const [appointmentTime, setAppointmentTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   function handleSelectPlate(v: StockBoardVehicle) {
     setPlate(v.vin);
     setShowSuggestions(false);
+    if (!company && v.company) setCompany(v.company);
   }
 
   const plateQuery = plate.trim().toLowerCase();
@@ -50,7 +53,9 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
       const formData = new FormData();
       formData.set("plate", plate.trim());
       formData.set("branch", branch.trim());
+      formData.set("company", company.trim());
       formData.set("appointmentDate", appointmentDate);
+      formData.set("appointmentTime", appointmentTime);
       await logPuspakomBooking(formData);
       onSaved();
     } catch (err) {
@@ -96,6 +101,14 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
           )}
         </div>
 
+        <label className={LABEL}>Company</label>
+        <input
+          className={FIELD}
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          placeholder="e.g. ELK-DESA"
+        />
+
         <label className={LABEL}>Puspakom branch</label>
         <input
           className={FIELD}
@@ -104,13 +117,26 @@ export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
           placeholder="Optional"
         />
 
-        <label className={LABEL}>Appointment date</label>
-        <input
-          type="date"
-          className={FIELD}
-          value={appointmentDate}
-          onChange={(e) => setAppointmentDate(e.target.value)}
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className={LABEL}>Appointment date</label>
+            <input
+              type="date"
+              className={FIELD}
+              value={appointmentDate}
+              onChange={(e) => setAppointmentDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Time</label>
+            <input
+              type="time"
+              className={FIELD}
+              value={appointmentTime}
+              onChange={(e) => setAppointmentTime(e.target.value)}
+            />
+          </div>
+        </div>
 
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}
 

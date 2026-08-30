@@ -14,7 +14,9 @@ export async function logPuspakomBooking(formData: FormData) {
 
   const plate = String(formData.get("plate") ?? "").trim();
   const branch = String(formData.get("branch") ?? "").trim();
+  const company = String(formData.get("company") ?? "").trim();
   const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
+  const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
   if (!plate) throw new Error("Enter a plate number.");
   if (!appointmentDate) throw new Error("Pick an appointment date.");
 
@@ -28,7 +30,9 @@ export async function logPuspakomBooking(formData: FormData) {
     noPlate: vehicle.vin,
     vehicle: vehicle.vehicle,
     branch,
+    company: company || vehicle.company || "",
     appointmentDate,
+    appointmentTime,
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });

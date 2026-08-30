@@ -10,7 +10,10 @@ export interface PuspakomBookingRow {
   no_plate: string;
   vehicle: string;
   branch: string;
+  company: string;
   appointment_date: string;
+  /** "HH:MM:SS" (Postgres time), or null if no specific time was given. */
+  appointment_time: string | null;
   status: "scheduled" | "completed";
   created_by: string | null;
   created_by_name: string;
@@ -48,7 +51,9 @@ export interface CreatePuspakomBookingInput {
   noPlate: string;
   vehicle: string;
   branch: string;
+  company: string;
   appointmentDate: string;
+  appointmentTime: string;
   createdByProfileId: string | null;
   createdByName: string;
 }
@@ -62,7 +67,9 @@ export async function createPuspakomBooking(
     no_plate: input.noPlate,
     vehicle: input.vehicle,
     branch: input.branch,
+    company: input.company,
     appointment_date: input.appointmentDate,
+    appointment_time: input.appointmentTime || null,
     created_by: input.createdByProfileId,
     created_by_name: input.createdByName,
   });

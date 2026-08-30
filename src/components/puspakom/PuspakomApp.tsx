@@ -50,8 +50,20 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
       list.push(b);
       map.set(b.appointment_date, list);
     }
+    for (const list of map.values()) {
+      list.sort((a, b) => (a.appointment_time ?? "99:99").localeCompare(b.appointment_time ?? "99:99"));
+    }
     return map;
   }, [bookings]);
+
+  function fmtTime(time: string | null): string {
+    if (!time) return "";
+    const [h, m] = time.split(":");
+    const hour = Number(h);
+    const period = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${hour12}:${m} ${period}`;
+  }
 
   const weeks = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
   const monthLabel = new Date(Date.UTC(viewYear, viewMonth - 1, 1)).toLocaleString("en-US", {
@@ -163,6 +175,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                             b.status === "completed" ? "bg-success/20 text-success" : "bg-danger/20 text-danger"
                           }`}
                         >
+                          {b.appointment_time ? `${fmtTime(b.appointment_time)} ` : ""}
                           {b.no_plate}
                         </button>
                       ))}
@@ -188,6 +201,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
               {selected.no_plate}
             </div>
             <div className="font-display mt-2 text-base font-semibold text-fg">{selected.vehicle}</div>
+            {selected.company && <div className="text-sm text-muted">{selected.company}</div>}
             <div className="mt-1 text-sm text-muted">
               {new Date(selected.appointment_date + "T00:00:00").toLocaleDateString(undefined, {
                 weekday: "long",
@@ -195,6 +209,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                 day: "numeric",
                 year: "numeric",
               })}
+              {selected.appointment_time && ` · ${fmtTime(selected.appointment_time)}`}
               {selected.branch && ` · ${selected.branch}`}
             </div>
             <div className="mt-2 text-xs text-muted">

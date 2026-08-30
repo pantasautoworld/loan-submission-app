@@ -130,8 +130,7 @@ export async function extractGrantDetails(source: DocSource): Promise<GrantExtra
     `This is a Malaysian Vehicle Ownership Certificate ("Sijil Pemilikan Kenderaan" / "Perakuan Pendaftaran Kenderaan"). Read these fields exactly as printed:
 - "No. Pendaftaran" (registration/plate no.) - a short plate like "WWT 7595", never the engine or chassis number.
 - "Buatan / Nama Model" (make/model).
-- "No. Chasis" (chassis no.) - a long alphanumeric string.
-- "No. Enjin" (engine no.) - a long alphanumeric string, a different field from chassis.
+- "No. Chasis / No. Enjin" - this is usually ONE combined row holding BOTH numbers together, separated by a "/", e.g. "PL1BH3LTRLG058271 / S4PEVW8884" (chassis number first, engine number second - split it into chassisNo and engineNo accordingly). If chassis and engine are instead printed as two separate labelled fields, read them separately the same way. Either way, do NOT use "Keupayaan Enjin" (engine capacity, a short number like "1332" or "1500") for the engine number - that is a completely different field.
 - "Nama Pemunya Berdaftar" (registered owner's full name).
 - "Alamat" (registered owner's address).
 Return {"vehicleNo": string, "model": string, "chassisNo": string, "engineNo": string, "ownerName": string, "ownerAddress": string}. Use an empty string for any field you cannot confidently read rather than guessing.`

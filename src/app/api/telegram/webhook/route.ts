@@ -135,17 +135,14 @@ export async function POST(request: Request) {
 
   // A PDF sent as a file (not a photo) still counts for the invoice flow - the
   // grant scanner already handles PDFs, so a scanned/exported grant works the
-  // same way. Documents are only wired up for "invoice" - there's no PDF path
-  // for deposit receipts, those are always a photographed receipt.
+  // same way. Unlike photos, documents don't need the "invoice" caption to
+  // disambiguate - deposit receipts are always photographed, never sent as a
+  // file, so a PDF only ever means one thing in this bot.
   if (update.message?.document) {
-    const caption = update.message.caption ?? "";
-    if (caption.trim().toLowerCase() === "invoice") {
-      await handleInvoiceDocument(String(chatId), update.message.document, fromName);
+    if (update.message.document.mime_type !== "application/pdf") {
+      await sendTelegramMessage(String(chatId), `⚠️ Only PDF files are supported here - please send the grant as a PDF or a photo.`);
     } else {
-      await sendTelegramMessage(
-        String(chatId),
-        `⚠️ To generate an invoice from this file, resend it with the caption "invoice".`
-      );
+      await handleInvoiceDocument(String(chatId), update.message.document, fromName);
     }
     return NextResponse.json({ ok: true });
   }

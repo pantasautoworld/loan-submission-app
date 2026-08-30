@@ -38,6 +38,7 @@ export async function fetchClaimInvoice(supabase: SupabaseClient, id: string): P
 }
 
 export interface CreateClaimInvoiceInput {
+  invoiceDate: string;
   agentName: string;
   financier: string;
   term: "Loan" | "Cash";
@@ -66,6 +67,7 @@ export async function createClaimInvoice(
     .from("claim_invoices")
     .insert({
       invoice_no: invoiceNo,
+      invoice_date: input.invoiceDate,
       agent_name: input.agentName,
       financier: input.financier,
       term: input.term,

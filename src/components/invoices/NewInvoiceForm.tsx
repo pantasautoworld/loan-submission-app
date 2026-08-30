@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createInvoice } from "@/app/invoices/actions";
+import { malaysiaTodayIso } from "@/lib/timezone";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
@@ -23,6 +24,7 @@ export function NewInvoiceForm({ staffName }: Props) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerAddress, setBuyerAddress] = useState("");
 
+  const [invoiceDate, setInvoiceDate] = useState(malaysiaTodayIso());
   const [agentName, setAgentName] = useState(staffName);
   const [term, setTerm] = useState<"Loan" | "Cash">("Loan");
   const [loanAmount, setLoanAmount] = useState("");
@@ -59,6 +61,10 @@ export function NewInvoiceForm({ staffName }: Props) {
   }
 
   async function handleSubmit() {
+    if (!invoiceDate) {
+      setError("Pick the invoice date (car delivery date).");
+      return;
+    }
     if (!buyerName.trim()) {
       setError("Enter the buyer's name.");
       return;
@@ -75,6 +81,7 @@ export function NewInvoiceForm({ staffName }: Props) {
     setIsSaving(true);
     try {
       const formData = new FormData();
+      formData.set("invoiceDate", invoiceDate);
       formData.set("agentName", agentName.trim());
       formData.set("term", term);
       formData.set("buyerName", buyerName.trim());
@@ -154,6 +161,14 @@ export function NewInvoiceForm({ staffName }: Props) {
         />
 
         <h2 className="font-display mb-3 mt-5 text-lg font-semibold text-fg">3. Sale &amp; finance</h2>
+
+        <label className={LABEL}>Invoice date (car delivery date)</label>
+        <input
+          type="date"
+          className={FIELD}
+          value={invoiceDate}
+          onChange={(e) => setInvoiceDate(e.target.value)}
+        />
 
         <div className="grid grid-cols-2 gap-2.5">
           <div>

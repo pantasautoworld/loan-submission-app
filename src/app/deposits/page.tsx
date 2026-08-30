@@ -13,7 +13,12 @@ export default async function DepositsPage() {
   ]);
   // Keep showing a car after its first payment moves it to "deposit_paid" - staff still
   // need to log further payments (e.g. balance) against it, not just the very first one.
-  const approvedCars = vehicles.filter((v) => v.status === "reserved" || v.status === "deposit_paid");
+  // Also keep showing any car manually added by plate (see addDepositCarByPlate), even
+  // if its Stock Board status is neither of those - once tracking starts, don't hide it.
+  const trackedVehicleIds = new Set(deposits.map((d) => d.stock_board_vehicle_id));
+  const approvedCars = vehicles.filter(
+    (v) => v.status === "reserved" || v.status === "deposit_paid" || trackedVehicleIds.has(v.id)
+  );
 
   const depositsWithReceiptUrls = await Promise.all(
     deposits.map(async (d) => ({

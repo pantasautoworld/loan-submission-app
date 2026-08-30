@@ -131,6 +131,39 @@ export interface RecordDepositPaymentInput {
   source: "app" | "telegram";
 }
 
+async function upsertCarDeposit(
+  admin: SupabaseClient,
+  stockBoardVehicleId: string,
+  noPlate: string,
+  vehicle: string
+): Promise<CarDepositRow> {
+  const { data, error } = await admin
+    .from("car_deposits")
+    .upsert(
+      { stock_board_vehicle_id: stockBoardVehicleId, no_plate: noPlate, vehicle },
+      { onConflict: "stock_board_vehicle_id" }
+    )
+    .select()
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Could not create deposit record");
+  return data as CarDepositRow;
+}
+
+/**
+ * Starts tracking a car for deposit payments without logging one yet - the
+ * "add plate manually" entry point, for a car not currently auto-listed
+ * (e.g. its Stock Board status isn't Loan Approved/Deposit Received). Just
+ * an upsert, so calling it again for the same car is a harmless no-op.
+ */
+export async function ensureCarDeposit(
+  stockBoardVehicleId: string,
+  noPlate: string,
+  vehicle: string
+): Promise<CarDepositRow> {
+  const admin = createAdminClient();
+  return upsertCarDeposit(admin, stockBoardVehicleId, noPlate, vehicle);
+}
+
 /**
  * Shared by both entry points (in-app upload and a receipt texted straight
  * to the Telegram bot) so they can't drift: creates/reuses the car's
@@ -142,19 +175,7 @@ export async function recordDepositPayment(
 ): Promise<{ payment: DepositPaymentRow; carDepositId: string }> {
   const admin = createAdminClient();
 
-  const { data: carDeposit, error: upsertErr } = await admin
-    .from("car_deposits")
-    .upsert(
-      {
-        stock_board_vehicle_id: input.stockBoardVehicleId,
-        no_plate: input.noPlate,
-        vehicle: input.vehicle,
-      },
-      { onConflict: "stock_board_vehicle_id" }
-    )
-    .select()
-    .single();
-  if (upsertErr || !carDeposit) throw new Error(upsertErr?.message ?? "Could not create deposit record");
+  const carDeposit = await upsertCarDeposit(admin, input.stockBoardVehicleId, input.noPlate, input.vehicle);
 
   const { data: payment, error: insertErr } = await admin
     .from("car_deposit_payments")

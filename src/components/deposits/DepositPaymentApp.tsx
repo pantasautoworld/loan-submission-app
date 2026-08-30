@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
+import { addDepositCarByPlate, deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
 
 type PaymentWithUrl = DepositPaymentRow & { receiptUrl: string | null };
@@ -69,6 +69,9 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [addPlate, setAddPlate] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   async function handleDelete(payment: PaymentWithUrl) {
     if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
@@ -82,6 +85,20 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
     }
   }
 
+  async function handleAddPlate() {
+    if (!addPlate.trim()) return;
+    setAddError(null);
+    setIsAdding(true);
+    try {
+      await addDepositCarByPlate(addPlate.trim());
+      setAddPlate("");
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Could not add that plate.");
+    } finally {
+      setIsAdding(false);
+    }
+  }
+
   const q = search.trim().toLowerCase();
   const filteredCars = q
     ? approvedCars.filter((car) => `${car.vin} ${car.vehicle}`.toLowerCase().includes(q))
@@ -89,12 +106,30 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search number plate…"
-        className="mb-4 max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-      />
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search number plate…"
+          className="max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        />
+        <div className="flex-1" />
+        <input
+          value={addPlate}
+          onChange={(e) => setAddPlate(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAddPlate()}
+          placeholder="Add plate manually…"
+          className="max-w-[200px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        />
+        <button
+          onClick={handleAddPlate}
+          disabled={isAdding || !addPlate.trim()}
+          className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-sm text-fg hover:border-amber disabled:opacity-50"
+        >
+          {isAdding ? "Adding…" : "+ Add"}
+        </button>
+      </div>
+      {addError && <p className="-mt-2 mb-4 text-xs text-danger">{addError}</p>}
 
       {filteredCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">

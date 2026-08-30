@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import {
   DEPOSIT_METHODS,
+  ensureCarDeposit,
   recordDepositPayment,
   removeDepositPayment,
   setSigningDate as saveSigningDate,
   type DepositMethod,
 } from "@/lib/depositPayments";
+import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
 export async function logDepositPayment(formData: FormData) {
   const { profile } = await requireStaff();
@@ -46,6 +48,20 @@ export async function logDepositPayment(formData: FormData) {
     source: "app",
   });
 
+  revalidatePath("/deposits");
+}
+
+/** "Add plate manually" - starts tracking a car that isn't auto-listed (e.g. not currently Loan Approved) so staff can log a payment against it. */
+export async function addDepositCarByPlate(plate: string) {
+  await requireStaff();
+  const trimmed = plate.trim();
+  if (!trimmed) throw new Error("Enter a plate number.");
+
+  const vehicles = await fetchStockBoardVehicles();
+  const vehicle = findByPlate(trimmed, vehicles);
+  if (!vehicle) throw new Error(`No car on the Stock Board matches plate "${trimmed}".`);
+
+  await ensureCarDeposit(vehicle.id, vehicle.vin, vehicle.vehicle);
   revalidatePath("/deposits");
 }
 

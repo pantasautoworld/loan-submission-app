@@ -17,7 +17,7 @@ function fmtMoney(n: number): string {
 function fmtDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
 
 export function InvoiceApp({ role, invoices }: Props) {

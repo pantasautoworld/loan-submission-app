@@ -72,7 +72,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
-  const [depositFilter, setDepositFilter] = useState<"" | "pending" | "fully_paid">("");
+  const [depositFilter, setDepositFilter] = useState<"" | "pending" | "fully_paid" | "received">("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -133,7 +133,9 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
     const list = vehicles.filter((v) => {
       if (statusFilter && v.status !== statusFilter) return false;
       if (staffFilter && v.submittedBy !== staffFilter) return false;
-      if (depositFilter) {
+      if (depositFilter === "received") {
+        if ((depositTotals[v.id] ?? 0) <= 0) return false; // no approved payment yet
+      } else if (depositFilter) {
         const required = Number(v.deposit) || 0;
         if (required <= 0) return false; // no deposit set - not applicable either way
         const collected = depositTotals[v.id] ?? 0;
@@ -176,35 +178,50 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
     }
   }
 
+  const depositReceivedCount = useMemo(
+    () => vehicles.filter((v) => (depositTotals[v.id] ?? 0) > 0).length,
+    [vehicles, depositTotals]
+  );
+
   const statCards = [
     {
       label: "Total stock",
       value: stats.available + stats.reserved + stats.prep,
       key: "",
+      type: "status" as const,
     },
-    { label: "Available", value: stats.available, key: "available" },
-    { label: "Loan approved", value: stats.reserved, key: "reserved" },
-    { label: "Loan submission", value: stats.prep, key: "prep" },
-    { label: "Sold", value: stats.sold, key: "sold" },
+    { label: "Available", value: stats.available, key: "available", type: "status" as const },
+    { label: "Loan approved", value: stats.reserved, key: "reserved", type: "status" as const },
+    { label: "Deposit received", value: depositReceivedCount, key: "received", type: "deposit" as const },
+    { label: "Loan submission", value: stats.prep, key: "prep", type: "status" as const },
+    { label: "Sold", value: stats.sold, key: "sold", type: "status" as const },
   ];
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-5">
       <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-        {statCards.map((s) => (
-          <button
-            key={s.label}
-            onClick={() => setStatusFilter(s.key)}
-            className={`rounded-[10px] border px-4 py-3 text-left transition-colors ${
-              statusFilter === s.key
-                ? "border-amber bg-panel-raised"
-                : "border-line bg-panel hover:border-amber"
-            }`}
-          >
-            <div className="font-display text-2xl font-bold text-fg">{s.value}</div>
-            <div className="text-[11px] uppercase tracking-wide text-muted">{s.label}</div>
-          </button>
-        ))}
+        {statCards.map((s) => {
+          const isActive = s.type === "deposit" ? depositFilter === s.key : statusFilter === s.key;
+          return (
+            <button
+              key={s.label}
+              onClick={() => {
+                if (s.type === "deposit") {
+                  setDepositFilter(s.key as "" | "pending" | "fully_paid" | "received");
+                } else {
+                  setStatusFilter(s.key);
+                  if (s.key === "") setDepositFilter("");
+                }
+              }}
+              className={`rounded-[10px] border px-4 py-3 text-left transition-colors ${
+                isActive ? "border-amber bg-panel-raised" : "border-line bg-panel hover:border-amber"
+              }`}
+            >
+              <div className="font-display text-2xl font-bold text-fg">{s.value}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">{s.label}</div>
+            </button>
+          );
+        })}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -236,7 +253,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
         </select>
         <select
           value={depositFilter}
-          onChange={(e) => setDepositFilter(e.target.value as "" | "pending" | "fully_paid")}
+          onChange={(e) => setDepositFilter(e.target.value as "" | "pending" | "fully_paid" | "received")}
           className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
         >
           <option value="">All deposits</option>

@@ -67,6 +67,9 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
         <Link href="/puspakom" className="hover:text-amber">
           Puspakom Booking
         </Link>
+        <Link href="/invoices" className="hover:text-amber">
+          Claim Invoices
+        </Link>
         {role === "admin" && (
           <Link href="/staff" className="hover:text-amber">
             Manage Staff

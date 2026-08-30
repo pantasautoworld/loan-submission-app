@@ -138,6 +138,9 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
                         <div>
                           <span className="font-mono font-semibold text-fg">{fmtMoney(p.amount)}</span>
                           {p.method && <span className="ml-2 text-muted">{p.method}</span>}
+                          {p.receipt_number && (
+                            <span className="ml-2 font-mono text-muted">#{p.receipt_number}</span>
+                          )}
                           {p.note && <span className="ml-2 text-muted italic">{p.note}</span>}
                           <div className="text-[11px] text-muted">
                             By {p.uploaded_by_name} · {fmtDate(p.uploaded_at)}

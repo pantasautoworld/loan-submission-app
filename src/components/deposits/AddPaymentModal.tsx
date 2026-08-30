@@ -18,6 +18,7 @@ interface Props {
 
 export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose, onSaved }: Props) {
   const [note, setNote] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
   const [method, setMethod] = useState<DepositMethod | "">("");
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -46,6 +47,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       formData.set("noPlate", noPlate);
       formData.set("vehicle", vehicle);
       formData.set("note", note.trim());
+      formData.set("receiptNumber", receiptNumber.trim());
       formData.set("method", method);
       formData.set("amount", amount);
       formData.set("receipt", file);
@@ -93,6 +95,13 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
           accept="image/*,.pdf"
           className={FIELD}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+
+        <label className={LABEL}>Receipt No. (if have)</label>
+        <input
+          className={FIELD}
+          value={receiptNumber}
+          onChange={(e) => setReceiptNumber(e.target.value)}
         />
 
         <label className={LABEL}>Note</label>

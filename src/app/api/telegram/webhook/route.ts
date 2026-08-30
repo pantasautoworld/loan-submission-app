@@ -159,6 +159,7 @@ async function handleDepositPhoto(
       vehicle: vehicle.vehicle,
       note: parsed.note,
       method: "",
+      receiptNumber: "",
       amount: parsed.amount,
       receiptBytes: bytes,
       receiptExt: "jpg",
@@ -210,6 +211,7 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
     amount: resolved.payment.amount,
     note: resolved.payment.note,
     method: resolved.payment.method,
+    receiptNumber: resolved.payment.receipt_number,
     uploadedByName: resolved.payment.uploaded_by_name,
   })}\n\n${resolvedLine}`;
 

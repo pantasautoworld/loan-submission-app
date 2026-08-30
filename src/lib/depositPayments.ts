@@ -16,6 +16,7 @@ export interface DepositPaymentRow {
   note: string;
   amount: number;
   method: DepositMethod | "";
+  receipt_number: string;
   receipt_path: string | null;
   status: "pending" | "approved" | "rejected";
   uploaded_by: string | null;
@@ -54,6 +55,7 @@ export function buildDepositCaption(input: {
   amount: number;
   note: string;
   method?: string;
+  receiptNumber?: string;
   uploadedByName: string;
 }): string {
   return (
@@ -61,6 +63,7 @@ export function buildDepositCaption(input: {
     `${input.vehicle} (${input.noPlate})\n` +
     `Amount: RM${input.amount.toLocaleString()}` +
     (input.method ? `\nMethod: ${input.method}` : "") +
+    (input.receiptNumber ? `\nReceipt No: ${input.receiptNumber}` : "") +
     (input.note ? `\nNote: ${input.note}` : "") +
     `\nBy: ${input.uploadedByName}`
   );
@@ -100,6 +103,7 @@ export interface RecordDepositPaymentInput {
   vehicle: string;
   note: string;
   method: DepositMethod | "";
+  receiptNumber: string;
   amount: number;
   receiptBytes: Buffer;
   receiptExt: string;
@@ -139,6 +143,7 @@ export async function recordDepositPayment(
       car_deposit_id: carDeposit.id,
       note: input.note,
       method: input.method,
+      receipt_number: input.receiptNumber,
       amount: input.amount,
       status: "pending",
       uploaded_by: input.uploadedByProfileId,
@@ -164,6 +169,7 @@ export async function recordDepositPayment(
     amount: input.amount,
     note: input.note,
     method: input.method,
+    receiptNumber: input.receiptNumber,
     uploadedByName: input.uploadedByName,
   });
 
@@ -258,6 +264,7 @@ export async function removeDepositPayment(paymentId: string, actorName: string)
       amount: payment.amount,
       note: payment.note,
       method: payment.method,
+      receiptNumber: payment.receipt_number,
       uploadedByName: payment.uploaded_by_name,
     })}\n\n🗑 Deleted by ${actorName}`;
     await Promise.all(

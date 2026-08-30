@@ -17,6 +17,7 @@ export async function logDepositPayment(formData: FormData) {
   const noPlate = String(formData.get("noPlate") ?? "");
   const vehicle = String(formData.get("vehicle") ?? "");
   const note = String(formData.get("note") ?? "").trim();
+  const receiptNumber = String(formData.get("receiptNumber") ?? "").trim();
   const methodRaw = String(formData.get("method") ?? "");
   const amount = Number(formData.get("amount"));
   const file = formData.get("receipt") as File | null;
@@ -36,6 +37,7 @@ export async function logDepositPayment(formData: FormData) {
     vehicle,
     note,
     method,
+    receiptNumber,
     amount,
     receiptBytes: bytes,
     receiptExt: ext,

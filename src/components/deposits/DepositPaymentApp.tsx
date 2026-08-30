@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
+import { malaysiaDateParts, malaysiaYearMonth } from "@/lib/timezone";
 import {
   approveDepositPayment,
   deleteDepositPayment,
@@ -72,11 +73,69 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
   );
 }
 
+const monthOptions = (() => {
+  const { year: curYear, month: curMonth } = malaysiaDateParts();
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(curYear, curMonth - 1 - i, 1));
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    return {
+      value: `${y}-${String(m).padStart(2, "0")}`,
+      label: d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    };
+  });
+})();
+
 export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [addingDeposit, setAddingDeposit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryMonth, setSummaryMonth] = useState(monthOptions[0].value);
+
+  // Approved payments that landed in the selected month (by uploaded_at, i.e. when the
+  // customer actually paid) - rejected/other-status payments are excluded from the total,
+  // still-pending ones from the same month are only counted, not listed.
+  const monthlySummary = useMemo(() => {
+    const rows: {
+      paymentId: string;
+      plate: string;
+      vehicle: string;
+      amount: number;
+      method: string;
+      uploadedAt: string;
+      uploadedBy: string;
+    }[] = [];
+    let pendingCount = 0;
+
+    for (const d of deposits) {
+      for (const p of d.payments) {
+        if (!p.uploaded_at || malaysiaYearMonth(new Date(p.uploaded_at)) !== summaryMonth) continue;
+        if (p.status === "approved") {
+          rows.push({
+            paymentId: p.id,
+            plate: d.no_plate,
+            vehicle: d.vehicle,
+            amount: p.amount,
+            method: p.method,
+            uploadedAt: p.uploaded_at,
+            uploadedBy: p.uploaded_by_name,
+          });
+        } else if (p.status === "pending") {
+          pendingCount += 1;
+        }
+      }
+    }
+    rows.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
+    return {
+      rows,
+      total: rows.reduce((sum, r) => sum + r.amount, 0),
+      carCount: new Set(rows.map((r) => r.plate)).size,
+      pendingCount,
+    };
+  }, [deposits, summaryMonth]);
 
   async function handleDelete(payment: PaymentWithUrl) {
     if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
@@ -115,14 +174,79 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap gap-2.5">
         <button
           onClick={() => setAddingDeposit(true)}
           className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
         >
           + Add deposit
         </button>
+        <button
+          onClick={() => setShowSummary((v) => !v)}
+          className="rounded-[7px] border border-line bg-panel-raised px-4 py-2 text-sm text-fg hover:border-amber"
+        >
+          {showSummary ? "Hide monthly summary" : "Monthly summary"}
+        </button>
       </div>
+
+      {showSummary && (
+        <div className="mb-4 rounded-[10px] border border-line bg-panel p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-display text-base font-semibold text-fg">Monthly summary</h3>
+            <select
+              value={summaryMonth}
+              onChange={(e) => setSummaryMonth(e.target.value)}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            >
+              {monthOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
+              <div className="font-display text-xl font-bold text-fg">{fmtMoney(monthlySummary.total)}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">Collected</div>
+            </div>
+            <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
+              <div className="font-display text-xl font-bold text-fg">{monthlySummary.rows.length}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">Approved payments</div>
+            </div>
+            <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
+              <div className="font-display text-xl font-bold text-fg">{monthlySummary.carCount}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">Cars</div>
+            </div>
+            <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
+              <div className="font-display text-xl font-bold text-fg">{monthlySummary.pendingCount}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">Still pending</div>
+            </div>
+          </div>
+
+          {monthlySummary.rows.length === 0 ? (
+            <p className="text-sm text-muted">No approved deposits logged this month.</p>
+          ) : (
+            <div className="divide-y divide-line border-t border-line">
+              {monthlySummary.rows.map((r) => (
+                <div key={r.paymentId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <div>
+                    <span className="font-mono font-semibold text-fg">{r.plate}</span>
+                    <span className="ml-2 text-muted">{r.vehicle}</span>
+                  </div>
+                  <div className="text-right text-xs text-muted">
+                    <span className="font-mono text-sm font-semibold text-fg">{fmtMoney(r.amount)}</span>
+                    <span className="ml-2">
+                      {r.method || "—"} · {fmtDate(r.uploadedAt)} · {r.uploadedBy}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {trackedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">

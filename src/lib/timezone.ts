@@ -26,3 +26,9 @@ export function malaysiaTodayIso(date: Date = new Date()): string {
   const { year, month, day } = malaysiaDateParts(date);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+/** "YYYY-MM" for the given instant, in Malaysia time - for bucketing timestamps by month. */
+export function malaysiaYearMonth(date: Date): string {
+  const { year, month } = malaysiaDateParts(date);
+  return `${year}-${String(month).padStart(2, "0")}`;
+}

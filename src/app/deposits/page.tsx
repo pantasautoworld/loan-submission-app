@@ -30,6 +30,7 @@ export default async function DepositsPage() {
       <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Deposit Payment"]} />
       <DepositPaymentApp
         staffName={profile.full_name}
+        role={profile.role}
         approvedCars={approvedCars}
         deposits={depositsWithReceiptUrls}
       />

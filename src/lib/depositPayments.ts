@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  editTelegramMessageCaption,
   sendTelegramPhoto,
   telegramChatAllowlist,
   type InlineKeyboard,
@@ -221,6 +222,48 @@ export async function resolveDepositPayment(
     car_deposits: CarDepositRow;
   };
   return { payment: payment as DepositPaymentRow, carDeposit };
+}
+
+/**
+ * Admin-only correction for a wrongly-uploaded payment: removes the row and
+ * its receipt, and best-effort edits every admin's Telegram copy to show it
+ * was deleted (removing the now-dangling Approve/Reject buttons) rather than
+ * leaving them tappable against a payment that no longer exists.
+ */
+export async function removeDepositPayment(paymentId: string, actorName: string): Promise<void> {
+  const admin = createAdminClient();
+
+  const { data, error: fetchErr } = await admin
+    .from("car_deposit_payments")
+    .select("*, car_deposits(*)")
+    .eq("id", paymentId)
+    .single();
+  if (fetchErr || !data) throw new Error(fetchErr?.message ?? "Payment not found");
+
+  const { car_deposits: carDeposit, ...payment } = data as DepositPaymentRow & {
+    car_deposits: CarDepositRow;
+  };
+
+  const { error: deleteErr } = await admin.from("car_deposit_payments").delete().eq("id", paymentId);
+  if (deleteErr) throw new Error(deleteErr.message);
+
+  if (payment.receipt_path) {
+    await admin.storage.from("submission-files").remove([payment.receipt_path]).catch(() => {});
+  }
+
+  if (payment.telegram_messages.length > 0) {
+    const caption = `${buildDepositCaption({
+      vehicle: carDeposit.vehicle,
+      noPlate: carDeposit.no_plate,
+      amount: payment.amount,
+      note: payment.note,
+      method: payment.method,
+      uploadedByName: payment.uploaded_by_name,
+    })}\n\n🗑 Deleted by ${actorName}`;
+    await Promise.all(
+      payment.telegram_messages.map((tm) => editTelegramMessageCaption(tm.chat_id, tm.message_id, caption))
+    );
+  }
 }
 
 export async function setSigningDate(carDepositId: string, signingDate: string): Promise<void> {

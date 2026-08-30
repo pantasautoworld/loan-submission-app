@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireStaff } from "@/lib/auth";
+import { requireAdmin, requireStaff } from "@/lib/auth";
 import {
   DEPOSIT_METHODS,
   recordDepositPayment,
+  removeDepositPayment,
   setSigningDate as saveSigningDate,
   type DepositMethod,
 } from "@/lib/depositPayments";
@@ -43,6 +44,12 @@ export async function logDepositPayment(formData: FormData) {
     source: "app",
   });
 
+  revalidatePath("/deposits");
+}
+
+export async function deleteDepositPayment(paymentId: string) {
+  const { profile } = await requireAdmin();
+  await removeDepositPayment(paymentId, profile.full_name || "Admin");
   revalidatePath("/deposits");
 }
 

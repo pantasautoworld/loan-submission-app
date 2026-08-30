@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { updateSigningDate } from "@/app/deposits/actions";
+import { deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
 
 type PaymentWithUrl = DepositPaymentRow & { receiptUrl: string | null };
@@ -11,6 +11,7 @@ type DepositWithUrls = CarDepositRow & { payments: PaymentWithUrl[] };
 
 interface Props {
   staffName: string;
+  role: string;
   approvedCars: StockBoardVehicle[];
   deposits: DepositWithUrls[];
 }
@@ -64,9 +65,22 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
   );
 }
 
-export function DepositPaymentApp({ approvedCars, deposits }: Props) {
+export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(payment: PaymentWithUrl) {
+    if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
+    setDeletingId(payment.id);
+    try {
+      await deleteDepositPayment(payment.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete - try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const q = search.trim().toLowerCase();
   const filteredCars = q
@@ -148,6 +162,15 @@ export function DepositPaymentApp({ approvedCars, deposits }: Props) {
                           >
                             {STATUS_LABEL[p.status] ?? p.status}
                           </span>
+                          {role === "admin" && (
+                            <button
+                              onClick={() => handleDelete(p)}
+                              disabled={deletingId === p.id}
+                              className="text-xs text-muted hover:text-danger hover:underline disabled:opacity-50"
+                            >
+                              {deletingId === p.id ? "Deleting…" : "Delete"}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

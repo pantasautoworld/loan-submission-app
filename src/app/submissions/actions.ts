@@ -9,19 +9,20 @@ import { notifyTelegram } from "@/lib/telegram";
  * Admin-only: records that this submission was reviewed and actually sent to
  * the credit company. This is what assigns the ticket number (a DB trigger
  * fires the moment submitted_at is first set - see the
- * move_ticket_no_to_submitted_action migration) and sends the one-time
- * Telegram notification, so regenerating the packet afterwards never
- * re-triggers either.
+ * move_ticket_no_to_submitted_action / ticket_prefix_from_submitter_username
+ * migrations), prefixed with the submitting admin's own username, and sends
+ * the one-time Telegram notification, so regenerating the packet afterwards
+ * never re-triggers either.
  */
 export async function markSubmitted(submissionId: string) {
-  const { supabase } = await requireAdmin();
+  const { supabase, profile } = await requireAdmin();
 
   // .is("submitted_at", null) guards against a double-click (or a race) firing
   // a second notification - if the row was already submitted, this matches
   // zero rows and `updated` comes back null.
   const { data: updated, error } = await supabase
     .from("submissions")
-    .update({ submitted_at: new Date().toISOString() })
+    .update({ submitted_at: new Date().toISOString(), submitted_by: profile.id })
     .eq("id", submissionId)
     .is("submitted_at", null)
     .select("no_plate, model, ticket_no")
@@ -59,7 +60,7 @@ export async function undoSubmitted(submissionId: string) {
 
   const { error } = await supabase
     .from("submissions")
-    .update({ submitted_at: null })
+    .update({ submitted_at: null, submitted_by: null })
     .eq("id", submissionId)
     .not("submitted_at", "is", null);
   if (error) throw new Error(error.message);

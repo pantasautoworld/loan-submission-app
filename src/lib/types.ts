@@ -76,7 +76,9 @@ export interface SubmissionRow {
   created_at: string;
   /** When an admin clicked "Submitted" (submitted to the credit company) - null until then. */
   submitted_at: string | null;
-  /** Auto-assigned by a DB trigger the moment submitted_at is first set, e.g. "PANTAS/008/001" - resets to 001 each Malaysia-time month. Null until submitted. */
+  /** The admin who clicked "Submitted" - their username becomes the ticket_no prefix. Null until submitted. */
+  submitted_by: string | null;
+  /** Auto-assigned by a DB trigger the moment submitted_at is first set, e.g. "JOHN/008/001" (prefix is the submitter's username) - the running number resets to 001 each Malaysia-time month. Null until submitted. */
   ticket_no: string | null;
 }
 

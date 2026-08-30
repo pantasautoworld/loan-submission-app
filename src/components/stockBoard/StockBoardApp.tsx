@@ -7,6 +7,7 @@ import {
   refreshStockBoardVehicles,
   type StockBoardVehicle,
 } from "@/lib/stockBoard";
+import type { PuspakomType } from "@/lib/puspakomBookings";
 import { CarModal } from "./CarModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -28,8 +29,8 @@ interface Props {
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
   depositTotals: Record<string, number>;
-  /** Vehicle ids with at least one completed Puspakom booking - shows the ✅ Puspakom tag. */
-  puspakomCompletedIds: string[];
+  /** Completed inspection type(s) per Stock Board vehicle id - shows a ✅ B5 / ✅ B7 tag beside the plate. */
+  puspakomCompletedTypes: Record<string, PuspakomType[]>;
 }
 
 function fmtMoney(n: string | number | undefined): string {
@@ -67,8 +68,7 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedIds }: Props) {
-  const puspakomCompleted = useMemo(() => new Set(puspakomCompletedIds), [puspakomCompletedIds]);
+export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedTypes }: Props) {
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -306,8 +306,18 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                 </div>
                 <div className="flex flex-1 flex-col p-4">
                   {v.vin && (
-                    <div className="mb-2 inline-flex w-fit items-center self-start rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3.5 py-1 font-mono text-base font-bold tracking-wide text-[#14171a]">
-                      {v.vin}
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="inline-flex w-fit items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3.5 py-1 font-mono text-base font-bold tracking-wide text-[#14171a]">
+                        {v.vin}
+                      </div>
+                      {(puspakomCompletedTypes[v.id] ?? []).map((type) => (
+                        <span
+                          key={type}
+                          className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success"
+                        >
+                          ✅ {type}
+                        </span>
+                      ))}
                     </div>
                   )}
                   <div className="font-display mb-1 text-base font-semibold text-fg">{v.vehicle}</div>
@@ -327,11 +337,6 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                     {depositPending && (
                       <span className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber">
                         Deposit pending
-                      </span>
-                    )}
-                    {puspakomCompleted.has(v.id) && (
-                      <span className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success">
-                        ✅ Puspakom
                       </span>
                     )}
                     {v.company && (

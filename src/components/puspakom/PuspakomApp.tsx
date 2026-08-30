@@ -103,7 +103,10 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                   {carBookings.map((b) => (
                     <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
                       <div>
-                        <span className="font-semibold text-fg">{fmtDate(b.appointment_date)}</span>
+                        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-xs font-semibold text-fg">
+                          {b.inspection_type}
+                        </span>
+                        <span className="ml-2 font-semibold text-fg">{fmtDate(b.appointment_date)}</span>
                         {b.branch && <span className="ml-2 text-muted">{b.branch}</span>}
                         <div className="text-[11px] text-muted">
                           Booked by {b.created_by_name}

@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export const PUSPAKOM_TYPES = ["B5", "B7"] as const;
+export type PuspakomType = (typeof PUSPAKOM_TYPES)[number];
+
 export interface PuspakomBookingRow {
   id: string;
   stock_board_vehicle_id: string;
@@ -7,6 +10,7 @@ export interface PuspakomBookingRow {
   vehicle: string;
   branch: string;
   appointment_date: string;
+  inspection_type: PuspakomType;
   status: "scheduled" | "completed";
   created_by: string | null;
   created_by_name: string;
@@ -25,17 +29,26 @@ export async function fetchPuspakomBookings(supabase: SupabaseClient): Promise<P
 }
 
 /**
- * Which Stock Board cars have at least one completed booking - for the ✅
- * Puspakom tag on the Stock Board. Returned as a plain array (not a Set) so
+ * Which inspection type(s) each Stock Board car has completed - for the ✅
+ * B5 / ✅ B7 tags beside its plate. Returned as a plain object (not a Map) so
  * it serializes cleanly across the server/client component boundary.
  */
-export async function fetchCompletedPuspakomVehicleIds(supabase: SupabaseClient): Promise<string[]> {
+export async function fetchCompletedPuspakomTypesByVehicle(
+  supabase: SupabaseClient
+): Promise<Record<string, PuspakomType[]>> {
   const { data, error } = await supabase
     .from("puspakom_bookings")
-    .select("stock_board_vehicle_id")
+    .select("stock_board_vehicle_id, inspection_type")
     .eq("status", "completed");
   if (error) throw new Error(error.message);
-  return [...new Set((data ?? []).map((r) => r.stock_board_vehicle_id as string))];
+
+  const byVehicle: Record<string, PuspakomType[]> = {};
+  for (const row of (data ?? []) as { stock_board_vehicle_id: string; inspection_type: PuspakomType }[]) {
+    const types = byVehicle[row.stock_board_vehicle_id] ?? [];
+    if (!types.includes(row.inspection_type)) types.push(row.inspection_type);
+    byVehicle[row.stock_board_vehicle_id] = types;
+  }
+  return byVehicle;
 }
 
 export interface CreatePuspakomBookingInput {
@@ -44,6 +57,7 @@ export interface CreatePuspakomBookingInput {
   vehicle: string;
   branch: string;
   appointmentDate: string;
+  inspectionType: PuspakomType;
   createdByProfileId: string | null;
   createdByName: string;
 }
@@ -58,6 +72,7 @@ export async function createPuspakomBooking(
     vehicle: input.vehicle,
     branch: input.branch,
     appointment_date: input.appointmentDate,
+    inspection_type: input.inspectionType,
     created_by: input.createdByProfileId,
     created_by_name: input.createdByName,
   });

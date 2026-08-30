@@ -6,6 +6,7 @@ import {
   DEPOSIT_METHODS,
   recordDepositPayment,
   removeDepositPayment,
+  resolveDepositPaymentAndNotify,
   setSigningDate as saveSigningDate,
   type DepositMethod,
 } from "@/lib/depositPayments";
@@ -76,6 +77,22 @@ export async function logDepositPaymentByPlate(formData: FormData) {
     source: "app",
   });
 
+  revalidatePath("/deposits");
+}
+
+/** Admin-only: same effect as tapping ✅ Approve on Telegram, but from the website. */
+export async function approveDepositPayment(paymentId: string) {
+  const { profile } = await requireAdmin();
+  const resolved = await resolveDepositPaymentAndNotify(paymentId, "approved", profile.full_name || "Admin");
+  if (!resolved) throw new Error("This payment was already resolved.");
+  revalidatePath("/deposits");
+}
+
+/** Admin-only: same effect as tapping ❌ Reject on Telegram, but from the website. */
+export async function rejectDepositPayment(paymentId: string) {
+  const { profile } = await requireAdmin();
+  const resolved = await resolveDepositPaymentAndNotify(paymentId, "rejected", profile.full_name || "Admin");
+  if (!resolved) throw new Error("This payment was already resolved.");
   revalidatePath("/deposits");
 }
 

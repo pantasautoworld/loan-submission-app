@@ -7,12 +7,7 @@ import {
   sendTelegramMessage,
   telegramChatAllowlist,
 } from "@/lib/telegram";
-import {
-  buildDepositCaption,
-  editDepositTelegramMessage,
-  recordDepositPayment,
-  resolveDepositPayment,
-} from "@/lib/depositPayments";
+import { recordDepositPayment, resolveDepositPaymentAndNotify } from "@/lib/depositPayments";
 
 const CARS_ELIGIBLE_FOR_DEPOSITS = ["reserved"];
 
@@ -201,35 +196,11 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
   const decision = action.toLowerCase() === "approve" ? "approved" : "rejected";
   const approverName = cq.from?.first_name || "Admin";
 
-  const resolved = await resolveDepositPayment(paymentId, decision, approverName);
+  const resolved = await resolveDepositPaymentAndNotify(paymentId, decision, approverName);
   if (!resolved) {
     await answerTelegramCallbackQuery(cq.id, "Already resolved.");
     return;
   }
 
   await answerTelegramCallbackQuery(cq.id, decision === "approved" ? "Approved!" : "Rejected.");
-
-  const resolvedLine =
-    decision === "approved" ? `✅ Approved by ${approverName}` : `❌ Rejected by ${approverName}`;
-  const caption = `${buildDepositCaption({
-    vehicle: resolved.carDeposit.vehicle,
-    noPlate: resolved.carDeposit.no_plate,
-    amount: resolved.payment.amount,
-    note: resolved.payment.note,
-    method: resolved.payment.method,
-    receiptNumber: resolved.payment.receipt_number,
-    uploadedByName: resolved.payment.uploaded_by_name,
-  })}\n\n${resolvedLine}`;
-
-  // Update every admin's copy of the message, not just the one who tapped -
-  // otherwise the other admins are left looking at stale Approve/Reject buttons.
-  await Promise.all(
-    resolved.payment.telegram_messages.map((tm) => editDepositTelegramMessage(tm, caption))
-  );
-
-  await notifyTelegram(
-    `${resolvedLine}: RM${resolved.payment.amount.toLocaleString()}` +
-      `${resolved.payment.note ? ` (${resolved.payment.note})` : ""} for ` +
-      `${resolved.carDeposit.vehicle} (${resolved.carDeposit.no_plate}).`
-  );
 }

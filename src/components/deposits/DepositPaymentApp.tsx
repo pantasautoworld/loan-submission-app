@@ -3,7 +3,12 @@
 import { useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
+import {
+  approveDepositPayment,
+  deleteDepositPayment,
+  rejectDepositPayment,
+  updateSigningDate,
+} from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { AddDepositModal } from "./AddDepositModal";
 
@@ -71,6 +76,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [addingDeposit, setAddingDeposit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   async function handleDelete(payment: PaymentWithUrl) {
     if (!confirm(`Delete this ${fmtMoney(payment.amount)} payment? This cannot be undone.`)) return;
@@ -84,12 +90,21 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
     }
   }
 
-  // Only cars with at least one *approved* payment - pending/rejected-only ones stay
-  // hidden until you approve one on Telegram. Most recently active first.
+  async function handleResolve(payment: PaymentWithUrl, decision: "approved" | "rejected") {
+    setResolvingId(payment.id);
+    try {
+      await (decision === "approved" ? approveDepositPayment : rejectDepositPayment)(payment.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not update - try again.");
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
+  // Every car with at least one payment logged - pending ones show up here too now,
+  // not just approved, so admin can approve/reject straight from the website.
   const trackedCars = vehicles
-    .filter((v) =>
-      deposits.some((d) => d.stock_board_vehicle_id === v.id && d.payments.some((p) => p.status === "approved"))
-    )
+    .filter((v) => deposits.some((d) => d.stock_board_vehicle_id === v.id && d.payments.length > 0))
     .sort((a, b) => {
       const da = deposits.find((d) => d.stock_board_vehicle_id === a.id);
       const db = deposits.find((d) => d.stock_board_vehicle_id === b.id);
@@ -111,8 +126,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
       {trackedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          No deposits approved yet. Use &quot;+ Add deposit&quot; to log one, then approve it on
-          Telegram for it to show up here.
+          No deposits logged yet. Use &quot;+ Add deposit&quot; to log one.
         </div>
       ) : (
         <div className="space-y-4">
@@ -177,6 +191,24 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                           >
                             {STATUS_LABEL[p.status] ?? p.status}
                           </span>
+                          {role === "admin" && p.status === "pending" && (
+                            <>
+                              <button
+                                onClick={() => handleResolve(p, "approved")}
+                                disabled={resolvingId === p.id}
+                                className="text-xs text-success hover:underline disabled:opacity-50"
+                              >
+                                {resolvingId === p.id ? "…" : "Approve"}
+                              </button>
+                              <button
+                                onClick={() => handleResolve(p, "rejected")}
+                                disabled={resolvingId === p.id}
+                                className="text-xs text-danger hover:underline disabled:opacity-50"
+                              >
+                                {resolvingId === p.id ? "…" : "Reject"}
+                              </button>
+                            </>
+                          )}
                           {role === "admin" && (
                             <button
                               onClick={() => handleDelete(p)}

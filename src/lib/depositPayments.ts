@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   editTelegramMessageCaption,
   editTelegramMessageText,
+  notifyTelegram,
   sendTelegramMessageWithKeyboard,
   sendTelegramPhoto,
   telegramChatAllowlist,
@@ -273,6 +274,45 @@ export async function resolveDepositPayment(
     car_deposits: CarDepositRow;
   };
   return { payment: payment as DepositPaymentRow, carDeposit };
+}
+
+/**
+ * Shared by both approval entry points (a Telegram Approve/Reject tap, and
+ * the admin-only Approve/Reject buttons on the Deposit Payment page) so
+ * they can't drift: resolves the payment, edits every admin's Telegram copy
+ * to remove the buttons and show the outcome, then broadcasts a confirmation.
+ */
+export async function resolveDepositPaymentAndNotify(
+  paymentId: string,
+  decision: "approved" | "rejected",
+  approverName: string
+): Promise<{ payment: DepositPaymentRow; carDeposit: CarDepositRow } | null> {
+  const resolved = await resolveDepositPayment(paymentId, decision, approverName);
+  if (!resolved) return null;
+
+  const resolvedLine =
+    decision === "approved" ? `✅ Approved by ${approverName}` : `❌ Rejected by ${approverName}`;
+  const caption = `${buildDepositCaption({
+    vehicle: resolved.carDeposit.vehicle,
+    noPlate: resolved.carDeposit.no_plate,
+    amount: resolved.payment.amount,
+    note: resolved.payment.note,
+    method: resolved.payment.method,
+    receiptNumber: resolved.payment.receipt_number,
+    uploadedByName: resolved.payment.uploaded_by_name,
+  })}\n\n${resolvedLine}`;
+
+  await Promise.all(
+    resolved.payment.telegram_messages.map((tm) => editDepositTelegramMessage(tm, caption))
+  );
+
+  await notifyTelegram(
+    `${resolvedLine}: RM${resolved.payment.amount.toLocaleString()}` +
+      `${resolved.payment.note ? ` (${resolved.payment.note})` : ""} for ` +
+      `${resolved.carDeposit.vehicle} (${resolved.carDeposit.no_plate}).`
+  );
+
+  return resolved;
 }
 
 /**

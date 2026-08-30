@@ -12,7 +12,7 @@ export type DepositMethod = (typeof DEPOSIT_METHODS)[number];
 export interface DepositPaymentRow {
   id: string;
   car_deposit_id: string;
-  label: string;
+  note: string;
   amount: number;
   method: DepositMethod | "";
   receipt_path: string | null;
@@ -51,7 +51,7 @@ export function buildDepositCaption(input: {
   vehicle: string;
   noPlate: string;
   amount: number;
-  label: string;
+  note: string;
   method?: string;
   uploadedByName: string;
 }): string {
@@ -60,7 +60,7 @@ export function buildDepositCaption(input: {
     `${input.vehicle} (${input.noPlate})\n` +
     `Amount: RM${input.amount.toLocaleString()}` +
     (input.method ? `\nMethod: ${input.method}` : "") +
-    (input.label ? `\nLabel: ${input.label}` : "") +
+    (input.note ? `\nNote: ${input.note}` : "") +
     `\nBy: ${input.uploadedByName}`
   );
 }
@@ -97,7 +97,7 @@ export interface RecordDepositPaymentInput {
   stockBoardVehicleId: string;
   noPlate: string;
   vehicle: string;
-  label: string;
+  note: string;
   method: DepositMethod | "";
   amount: number;
   receiptBytes: Buffer;
@@ -136,7 +136,7 @@ export async function recordDepositPayment(
     .from("car_deposit_payments")
     .insert({
       car_deposit_id: carDeposit.id,
-      label: input.label,
+      note: input.note,
       method: input.method,
       amount: input.amount,
       status: "pending",
@@ -161,7 +161,7 @@ export async function recordDepositPayment(
     vehicle: input.vehicle,
     noPlate: input.noPlate,
     amount: input.amount,
-    label: input.label,
+    note: input.note,
     method: input.method,
     uploadedByName: input.uploadedByName,
   });

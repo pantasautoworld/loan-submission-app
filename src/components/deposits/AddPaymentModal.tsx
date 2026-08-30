@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose, onSaved }: Props) {
-  const [label, setLabel] = useState("");
+  const [note, setNote] = useState("");
   const [method, setMethod] = useState<DepositMethod | "">("");
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -45,7 +45,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       formData.set("stockBoardVehicleId", stockBoardVehicleId);
       formData.set("noPlate", noPlate);
       formData.set("vehicle", vehicle);
-      formData.set("label", label.trim());
+      formData.set("note", note.trim());
       formData.set("method", method);
       formData.set("amount", amount);
       formData.set("receipt", file);
@@ -64,14 +64,6 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
         <p className="mb-4 text-xs text-muted">
           {vehicle} ({noPlate})
         </p>
-
-        <label className={LABEL}>Label</label>
-        <input
-          className={FIELD}
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="e.g. Booking deposit"
-        />
 
         <label className={LABEL}>Deposit method</label>
         <select
@@ -101,6 +93,15 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
           accept="image/*,.pdf"
           className={FIELD}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+
+        <label className={LABEL}>Note</label>
+        <textarea
+          className={FIELD}
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional note"
         />
 
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}

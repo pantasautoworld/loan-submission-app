@@ -124,7 +124,7 @@ export function DepositPaymentApp({ approvedCars, deposits }: Props) {
                         <div>
                           <span className="font-mono font-semibold text-fg">{fmtMoney(p.amount)}</span>
                           {p.method && <span className="ml-2 text-muted">{p.method}</span>}
-                          {p.label && <span className="ml-2 text-muted">{p.label}</span>}
+                          {p.note && <span className="ml-2 text-muted italic">{p.note}</span>}
                           <div className="text-[11px] text-muted">
                             By {p.uploaded_by_name} · {fmtDate(p.uploaded_at)}
                             {p.status !== "pending" && p.approved_by_name

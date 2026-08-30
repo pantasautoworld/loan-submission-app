@@ -43,13 +43,13 @@ interface TelegramUpdate {
   };
 }
 
-/** "<PLATE> <AMOUNT> <label...>" e.g. "CEG171 5000 Booking deposit" - the format staff use when texting a receipt straight to the bot. */
-function parseDepositCaption(caption: string): { plateRaw: string; amount: number; label: string } | null {
+/** "<PLATE> <AMOUNT> <note...>" e.g. "CEG171 5000 Booking deposit" - the format staff use when texting a receipt straight to the bot. */
+function parseDepositCaption(caption: string): { plateRaw: string; amount: number; note: string } | null {
   const tokens = caption.trim().split(/\s+/);
   if (tokens.length < 2) return null;
   const amount = Number(tokens[1].replace(/,/g, ""));
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  return { plateRaw: tokens[0], amount, label: tokens.slice(2).join(" ") };
+  return { plateRaw: tokens[0], amount, note: tokens.slice(2).join(" ") };
 }
 
 export async function POST(request: Request) {
@@ -157,7 +157,7 @@ async function handleDepositPhoto(
       stockBoardVehicleId: vehicle.id,
       noPlate: vehicle.vin,
       vehicle: vehicle.vehicle,
-      label: parsed.label,
+      note: parsed.note,
       method: "",
       amount: parsed.amount,
       receiptBytes: bytes,
@@ -208,7 +208,7 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
     vehicle: resolved.carDeposit.vehicle,
     noPlate: resolved.carDeposit.no_plate,
     amount: resolved.payment.amount,
-    label: resolved.payment.label,
+    note: resolved.payment.note,
     method: resolved.payment.method,
     uploadedByName: resolved.payment.uploaded_by_name,
   })}\n\n${resolvedLine}`;
@@ -221,7 +221,7 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
 
   await notifyTelegram(
     `${resolvedLine}: RM${resolved.payment.amount.toLocaleString()}` +
-      `${resolved.payment.label ? ` (${resolved.payment.label})` : ""} for ` +
+      `${resolved.payment.note ? ` (${resolved.payment.note})` : ""} for ` +
       `${resolved.carDeposit.vehicle} (${resolved.carDeposit.no_plate}).`
   );
 }

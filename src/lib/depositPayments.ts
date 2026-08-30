@@ -43,6 +43,11 @@ export interface CarDepositWithPayments extends CarDepositRow {
   payments: DepositPaymentRow[];
 }
 
+/** Folder name for a car's receipts - e.g. "VAJ7259" - so all its payments land in one place, browsable by plate. */
+function sanitizePlateForPath(plate: string): string {
+  return plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "UNKNOWN";
+}
+
 function mimeFromExt(ext: string): string {
   const e = ext.toLowerCase();
   if (e === "png") return "image/png";
@@ -171,7 +176,7 @@ export async function recordDepositPayment(
   const hasReceipt = !!input.receiptBytes && !!input.receiptExt;
   let receiptPath: string | null = null;
   if (hasReceipt) {
-    receiptPath = `deposits/${carDeposit.id}/${payment.id}.${input.receiptExt}`;
+    receiptPath = `deposits/${sanitizePlateForPath(input.noPlate)}/${payment.id}.${input.receiptExt}`;
     const { error: uploadErr } = await admin.storage
       .from("submission-files")
       .upload(receiptPath, input.receiptBytes!, {

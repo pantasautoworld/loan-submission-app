@@ -38,12 +38,18 @@ interface TelegramPhotoSize {
   height: number;
 }
 
+interface TelegramDocument {
+  file_id: string;
+  mime_type?: string;
+}
+
 interface TelegramUpdate {
   message?: {
     chat?: { id?: number | string };
     text?: string;
     caption?: string;
     photo?: TelegramPhotoSize[];
+    document?: TelegramDocument;
     from?: { first_name?: string };
   };
   callback_query?: {
@@ -123,6 +129,23 @@ export async function POST(request: Request) {
       await handleInvoicePhoto(String(chatId), update.message.photo, fromName);
     } else {
       await handleDepositPhoto(String(chatId), update.message.photo, caption, fromName);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // A PDF sent as a file (not a photo) still counts for the invoice flow - the
+  // grant scanner already handles PDFs, so a scanned/exported grant works the
+  // same way. Documents are only wired up for "invoice" - there's no PDF path
+  // for deposit receipts, those are always a photographed receipt.
+  if (update.message?.document) {
+    const caption = update.message.caption ?? "";
+    if (caption.trim().toLowerCase() === "invoice") {
+      await handleInvoiceDocument(String(chatId), update.message.document, fromName);
+    } else {
+      await sendTelegramMessage(
+        String(chatId),
+        `⚠️ To generate an invoice from this file, resend it with the caption "invoice".`
+      );
     }
     return NextResponse.json({ ok: true });
   }
@@ -261,6 +284,38 @@ async function handleInvoicePhoto(
   }
 }
 
+/** Admin sent a car grant as a PDF file with caption "invoice" - same flow as handleInvoicePhoto, just downloaded via the document's own file_id instead of picking the largest photo size. */
+async function handleInvoiceDocument(
+  chatId: string,
+  document: TelegramDocument,
+  fromName: string | undefined
+): Promise<void> {
+  try {
+    const bytes = await getTelegramFileBytes(document.file_id);
+    if (!bytes) {
+      await sendTelegramMessage(chatId, `⚠️ Could not download that file - please try sending it again.`);
+      return;
+    }
+
+    const admin = createAdminClient();
+    const grantPath = `claim-invoices/telegram-drafts/${chatId}.pdf`;
+    const { error: uploadError } = await admin.storage
+      .from("submission-files")
+      .upload(grantPath, bytes, { upsert: true, contentType: "application/pdf" });
+    if (uploadError) throw new Error(uploadError.message);
+
+    await startInvoiceDraft(chatId, grantPath, fromName || "Telegram");
+
+    await sendTelegramMessage(
+      chatId,
+      `📄 Got the grant. What's the <b>delivery date</b>? Send it as DD/MM/YYYY, e.g. 31/8/2026.`
+    );
+  } catch (err) {
+    console.error("[telegram webhook] failed to start invoice draft from document:", err);
+    await sendTelegramMessage(chatId, `⚠️ Could not start the invoice - please try again.`);
+  }
+}
+
 /** A plain-text reply from a chat mid-way through the invoice flow - routes by which of the 3 questions is still open. */
 async function handleInvoiceDraftReply(chatId: string, text: string, draft: TelegramInvoiceDraft): Promise<void> {
   if (draft.step === "await_date") {
@@ -314,12 +369,14 @@ async function finalizeInvoiceDraft(
       throw new Error(downloadError?.message ?? "Could not re-download the grant photo");
     }
     const grantBytes = Buffer.from(await fileData.arrayBuffer());
+    const isPdf = draft.grant_path.toLowerCase().endsWith(".pdf");
+    const grantExt = isPdf ? "pdf" : "jpg";
 
-    const scanned = await extractGrantDetails({
-      kind: "image",
-      mediaType: "image/jpeg",
-      base64: grantBytes.toString("base64"),
-    });
+    const scanned = await extractGrantDetails(
+      isPdf
+        ? { kind: "pdf", base64: grantBytes.toString("base64") }
+        : { kind: "image", mediaType: "image/jpeg", base64: grantBytes.toString("base64") }
+    );
 
     const loanAmount = draft.loan_amount ?? 0;
     const sellingPrice = loanAmount + depositAmount;
@@ -343,7 +400,7 @@ async function finalizeInvoiceDraft(
       createdByName: draft.created_by_name,
     });
 
-    await attachClaimInvoiceGrant(admin, invoice.id, grantBytes, "jpg");
+    await attachClaimInvoiceGrant(admin, invoice.id, grantBytes, grantExt);
     await admin.storage.from("submission-files").remove([draft.grant_path]).catch(() => {});
     await deleteInvoiceDraft(chatId);
 

@@ -135,7 +135,7 @@ export default async function HomePage() {
       <TopNav staffName={profile.full_name} role={profile.role} />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
         <h1 className="font-display text-xl text-fg">Welcome, {profile.full_name || "there"}</h1>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/submissions/new"
             className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
@@ -301,6 +301,41 @@ export default async function HomePage() {
             <h2 className="font-medium text-fg">Stock Board</h2>
             <p className="mt-1 text-sm text-muted">
               Browse and manage vehicle inventory.
+            </p>
+          </Link>
+          <Link
+            href="/deposits"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-reserved/15 transition-colors group-hover:bg-status-reserved/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <path
+                  d="M12 4h20a2 2 0 0 1 2 2v34l-4-3-4 3-4-3-4 3-4-3-4 3V6a2 2 0 0 1 2-2Z"
+                  fill="#F2F1EC"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <line x1="16" y1="12" x2="28" y2="12" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="16" y1="17" x2="28" y2="17" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="16" y1="22" x2="24" y2="22" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <circle cx="33" cy="30" r="10" fill="#6EE7B7" stroke="#0f1115" strokeWidth="2.2" />
+                <text
+                  x="33"
+                  y="34"
+                  textAnchor="middle"
+                  fontFamily="Arial, Helvetica, sans-serif"
+                  fontWeight="700"
+                  fontSize="10"
+                  fill="#0f1115"
+                >
+                  RM
+                </text>
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Deposit Payment</h2>
+            <p className="mt-1 text-sm text-muted">
+              Track and approve customer deposit payments.
             </p>
           </Link>
         </div>

@@ -84,9 +84,12 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
     }
   }
 
-  // Every car with at least one deposit record, most recently active first.
+  // Only cars with at least one *approved* payment - pending/rejected-only ones stay
+  // hidden until you approve one on Telegram. Most recently active first.
   const trackedCars = vehicles
-    .filter((v) => deposits.some((d) => d.stock_board_vehicle_id === v.id))
+    .filter((v) =>
+      deposits.some((d) => d.stock_board_vehicle_id === v.id && d.payments.some((p) => p.status === "approved"))
+    )
     .sort((a, b) => {
       const da = deposits.find((d) => d.stock_board_vehicle_id === a.id);
       const db = deposits.find((d) => d.stock_board_vehicle_id === b.id);
@@ -108,7 +111,8 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
       {trackedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          No deposits logged yet. Use &quot;+ Add deposit&quot; to log the first one.
+          No deposits approved yet. Use &quot;+ Add deposit&quot; to log one, then approve it on
+          Telegram for it to show up here.
         </div>
       ) : (
         <div className="space-y-4">

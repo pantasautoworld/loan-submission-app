@@ -341,6 +341,42 @@ export default async function HomePage({
               Track and approve customer deposit payments.
             </p>
           </Link>
+          <Link
+            href="/puspakom"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-available/15 transition-colors group-hover:bg-status-available/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <rect
+                  x="8"
+                  y="4"
+                  width="26"
+                  height="34"
+                  rx="3"
+                  fill="#F2F1EC"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <line x1="13" y1="12" x2="29" y2="12" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="13" y1="17" x2="29" y2="17" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="13" y1="22" x2="23" y2="22" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <circle cx="33" cy="30" r="11" fill="#6EE7B7" stroke="#0f1115" strokeWidth="2.2" />
+                <path
+                  d="M27.5 30l3.5 3.5 6.5-7"
+                  fill="none"
+                  stroke="#0f1115"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Puspakom Booking</h2>
+            <p className="mt-1 text-sm text-muted">
+              Log inspection appointments and mark them complete.
+            </p>
+          </Link>
         </div>
 
         <div className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#6b21a8] via-[#c026d3] to-[#f97316] p-5 shadow-xl">

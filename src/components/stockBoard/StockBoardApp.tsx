@@ -28,6 +28,8 @@ interface Props {
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
   depositTotals: Record<string, number>;
+  /** Vehicle ids with at least one completed Puspakom booking - shows the ✅ Puspakom tag. */
+  puspakomCompletedIds: string[];
 }
 
 function fmtMoney(n: string | number | undefined): string {
@@ -65,7 +67,8 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Props) {
+export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedIds }: Props) {
+  const puspakomCompleted = useMemo(() => new Set(puspakomCompletedIds), [puspakomCompletedIds]);
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -324,6 +327,11 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Pr
                     {depositPending && (
                       <span className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber">
                         Deposit pending
+                      </span>
+                    )}
+                    {puspakomCompleted.has(v.id) && (
+                      <span className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success">
+                        ✅ Puspakom
                       </span>
                     )}
                     {v.company && (

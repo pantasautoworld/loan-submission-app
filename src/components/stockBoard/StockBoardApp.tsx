@@ -13,12 +13,14 @@ const STATUS_LABEL: Record<string, string> = {
   prep: "Loan Submission",
   available: "Available",
   reserved: "Loan Approved",
+  deposit_paid: "Deposit Received",
   sold: "Sold",
 };
 const STATUS_BG: Record<string, string> = {
   prep: "bg-status-prep",
   available: "bg-status-available",
   reserved: "bg-status-reserved",
+  deposit_paid: "bg-status-deposit-paid",
   sold: "bg-status-sold",
 };
 
@@ -113,7 +115,7 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
   }, [vehicles]);
 
   const stats = useMemo(() => {
-    const s = { prep: 0, available: 0, reserved: 0, sold: 0 };
+    const s = { prep: 0, available: 0, reserved: 0, deposit_paid: 0, sold: 0 };
     vehicles.forEach((v) => {
       if (v.status in s) s[v.status as keyof typeof s]++;
     });
@@ -166,16 +168,21 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
   }
 
   const statCards = [
-    { label: "Total stock", value: stats.available + stats.reserved + stats.prep, key: "" },
+    {
+      label: "Total stock",
+      value: stats.available + stats.reserved + stats.deposit_paid + stats.prep,
+      key: "",
+    },
     { label: "Available", value: stats.available, key: "available" },
     { label: "Loan approved", value: stats.reserved, key: "reserved" },
+    { label: "Deposit received", value: stats.deposit_paid, key: "deposit_paid" },
     { label: "Loan submission", value: stats.prep, key: "prep" },
     { label: "Sold", value: stats.sold, key: "sold" },
   ];
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-5">
-      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
         {statCards.map((s) => (
           <button
             key={s.label}

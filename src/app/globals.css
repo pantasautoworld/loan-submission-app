@@ -19,6 +19,7 @@
   --status-available: #e1b93b;
   --status-reserved: #4caf50;
   --status-sold: #e14b4b;
+  --status-deposit-paid: #4a90d9;
 }
 
 @theme inline {
@@ -38,6 +39,7 @@
   --color-status-available: var(--status-available);
   --color-status-reserved: var(--status-reserved);
   --color-status-sold: var(--status-sold);
+  --color-status-deposit-paid: var(--status-deposit-paid);
   --font-display: var(--font-display);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

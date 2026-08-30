@@ -11,7 +11,9 @@ export default async function DepositsPage() {
     fetchStockBoardVehicles(),
     fetchCarDeposits(supabase),
   ]);
-  const approvedCars = vehicles.filter((v) => v.status === "reserved");
+  // Keep showing a car after its first payment moves it to "deposit_paid" - staff still
+  // need to log further payments (e.g. balance) against it, not just the very first one.
+  const approvedCars = vehicles.filter((v) => v.status === "reserved" || v.status === "deposit_paid");
 
   const depositsWithReceiptUrls = await Promise.all(
     deposits.map(async (d) => ({

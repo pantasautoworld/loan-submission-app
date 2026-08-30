@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findByPlate, fetchStockBoardVehicles, markLoanApproved } from "@/lib/stockBoard";
+import { findByPlate, fetchStockBoardVehicles, markDepositReceived, markLoanApproved } from "@/lib/stockBoard";
 import {
   answerTelegramCallbackQuery,
   getTelegramFileBytes,
@@ -9,10 +9,13 @@ import {
 } from "@/lib/telegram";
 import {
   buildDepositCaption,
+  countApprovedPayments,
   editDepositTelegramMessage,
   recordDepositPayment,
   resolveDepositPayment,
 } from "@/lib/depositPayments";
+
+const CARS_ELIGIBLE_FOR_DEPOSITS = ["reserved", "deposit_paid"];
 
 // Every real approval note already starts "RM<deposit> ELK-DESA <PLATE> <name>..."
 // (both with and without a dash before the name) - anchoring on "ELK-DESA" doubles
@@ -142,10 +145,10 @@ async function handleDepositPhoto(
   try {
     const vehicles = await fetchStockBoardVehicles();
     const vehicle = findByPlate(parsed.plateRaw, vehicles);
-    if (!vehicle || vehicle.status !== "reserved") {
+    if (!vehicle || !CARS_ELIGIBLE_FOR_DEPOSITS.includes(vehicle.status)) {
       await sendTelegramMessage(
         chatId,
-        `⚠️ No car currently marked Loan Approved matches plate "${parsed.plateRaw}".`
+        `⚠️ No car currently Loan Approved or awaiting deposit matches plate "${parsed.plateRaw}".`
       );
       return;
     }
@@ -230,4 +233,29 @@ async function handleCallbackQuery(cq: NonNullable<TelegramUpdate["callback_quer
       `${resolved.payment.note ? ` (${resolved.payment.note})` : ""} for ` +
       `${resolved.carDeposit.vehicle} (${resolved.carDeposit.no_plate}).`
   );
+
+  if (decision === "approved") {
+    await maybeMoveToDepositReceived(resolved.payment.car_deposit_id, resolved.carDeposit, approverName);
+  }
+}
+
+/** Moves the car to "Deposit Received" on the Stock Board the moment its first payment is approved - never on later ones. */
+async function maybeMoveToDepositReceived(
+  carDepositId: string,
+  carDeposit: { stock_board_vehicle_id: string; vehicle: string; no_plate: string },
+  actorName: string
+): Promise<void> {
+  try {
+    const approvedCount = await countApprovedPayments(carDepositId);
+    if (approvedCount !== 1) return; // not the first approved payment - status already moved on
+
+    const result = await markDepositReceived(carDeposit.stock_board_vehicle_id, actorName);
+    if (result.ok) {
+      await notifyTelegram(
+        `📦 <b>${carDeposit.vehicle}</b> (${carDeposit.no_plate}) → Deposit Received.`
+      );
+    }
+  } catch (err) {
+    console.error("[telegram webhook] failed to move car to Deposit Received:", err);
+  }
 }

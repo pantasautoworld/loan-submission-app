@@ -88,6 +88,26 @@ export async function editDepositTelegramMessage(
   }
 }
 
+/**
+ * Sum of *approved* payments per car, keyed by stock_board_vehicle_id - for
+ * the Stock Board's "Deposit pending" / "Fully deposited" filter, which
+ * compares this against each car's own "Deposit Required" figure.
+ */
+export async function fetchApprovedDepositTotals(supabase: SupabaseClient): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("car_deposit_payments")
+    .select("amount, car_deposits!inner(stock_board_vehicle_id)")
+    .eq("status", "approved");
+  if (error) throw new Error(error.message);
+
+  const totals: Record<string, number> = {};
+  for (const row of (data ?? []) as unknown as { amount: number; car_deposits: { stock_board_vehicle_id: string } }[]) {
+    const vehicleId = row.car_deposits.stock_board_vehicle_id;
+    totals[vehicleId] = (totals[vehicleId] ?? 0) + Number(row.amount);
+  }
+  return totals;
+}
+
 /** Every car_deposits row plus its payments, joined in-memory (small tables, simplest reliable option). */
 export async function fetchCarDeposits(supabase: SupabaseClient): Promise<CarDepositWithPayments[]> {
   const { data: deposits, error: depErr } = await supabase.from("car_deposits").select("*");

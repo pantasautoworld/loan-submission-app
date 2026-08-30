@@ -28,9 +28,11 @@ interface Props {
   staffName: string;
   role: string;
   staffNames: string[];
+  /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
+  depositTotals: Record<string, number>;
 }
 
-function fmtMoney(n: string | undefined): string {
+function fmtMoney(n: string | number | undefined): string {
   if (n === undefined || n === null || n === "") return "—";
   const num = Number(n);
   return Number.isFinite(num) ? num.toLocaleString() : "—";
@@ -65,13 +67,14 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames }: Props) {
+export function StockBoardApp({ staffName, role, staffNames, depositTotals }: Props) {
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
+  const [depositFilter, setDepositFilter] = useState<"" | "pending" | "fully_paid">("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -132,6 +135,14 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
     const list = vehicles.filter((v) => {
       if (statusFilter && v.status !== statusFilter) return false;
       if (staffFilter && v.submittedBy !== staffFilter) return false;
+      if (depositFilter) {
+        const required = Number(v.deposit) || 0;
+        if (required <= 0) return false; // no deposit set - not applicable either way
+        const collected = depositTotals[v.id] ?? 0;
+        const fullyPaid = collected >= required;
+        if (depositFilter === "fully_paid" && !fullyPaid) return false;
+        if (depositFilter === "pending" && fullyPaid) return false;
+      }
       if (!q) return true;
       return `${v.vehicle} ${v.vin}`.toLowerCase().includes(q);
     });
@@ -152,7 +163,7 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
         new Date(b.updatedAt || b.addedAt || 0).getTime() -
         new Date(a.updatedAt || a.addedAt || 0).getTime()
     );
-  }, [vehicles, search, statusFilter, staffFilter, sortBy]);
+  }, [vehicles, search, statusFilter, staffFilter, depositFilter, depositTotals, sortBy]);
 
   async function handleDelete(v: StockBoardVehicle) {
     if (!confirm(`Delete "${v.vehicle}" from the Stock Board?`)) return;
@@ -225,6 +236,15 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
         >
           <option value="recent">Sort: Most recent</option>
           <option value="submittedBy">Sort: Staff submitted</option>
+        </select>
+        <select
+          value={depositFilter}
+          onChange={(e) => setDepositFilter(e.target.value as "" | "pending" | "fully_paid")}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All deposits</option>
+          <option value="pending">Deposit pending</option>
+          <option value="fully_paid">Fully deposited</option>
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}
@@ -305,6 +325,18 @@ export function StockBoardApp({ staffName, role, staffNames }: Props) {
                       <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Required</span>
                       <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.deposit)}</span>
                     </div>
+                    {Number(v.deposit) > 0 && (
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Collected</span>
+                        <span
+                          className={`font-mono text-base font-semibold ${
+                            (depositTotals[v.id] ?? 0) >= Number(v.deposit) ? "text-success" : "text-fg"
+                          }`}
+                        >
+                          {fmtMoney(depositTotals[v.id] ?? 0)}
+                        </span>
+                      </div>
+                    )}
                     <div>
                       <span className="block text-[10px] uppercase tracking-wide text-muted">Tahun</span>
                       <span className="font-mono text-base font-semibold text-fg">{v.tahun || "—"}</span>

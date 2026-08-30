@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { CarDepositRow, DepositPaymentRow } from "@/lib/depositPayments";
-import { addDepositCarByPlate, deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
+import { addDepositCar, deleteDepositPayment, updateSigningDate } from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
 
 type PaymentWithUrl = DepositPaymentRow & { receiptUrl: string | null };
@@ -13,6 +13,7 @@ interface Props {
   staffName: string;
   role: string;
   approvedCars: StockBoardVehicle[];
+  addableCars: StockBoardVehicle[];
   deposits: DepositWithUrls[];
 }
 
@@ -65,11 +66,10 @@ function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
   );
 }
 
-export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
+export function DepositPaymentApp({ role, approvedCars, addableCars, deposits }: Props) {
   const [modalCar, setModalCar] = useState<StockBoardVehicle | null>(null);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [addPlate, setAddPlate] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -85,15 +85,15 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
     }
   }
 
-  async function handleAddPlate() {
-    if (!addPlate.trim()) return;
+  async function handleAddCar(vehicleId: string) {
+    const car = addableCars.find((c) => c.id === vehicleId);
+    if (!car) return;
     setAddError(null);
     setIsAdding(true);
     try {
-      await addDepositCarByPlate(addPlate.trim());
-      setAddPlate("");
+      await addDepositCar(car.id, car.vin, car.vehicle);
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Could not add that plate.");
+      setAddError(err instanceof Error ? err.message : "Could not add that car.");
     } finally {
       setIsAdding(false);
     }
@@ -114,20 +114,25 @@ export function DepositPaymentApp({ role, approvedCars, deposits }: Props) {
           className="max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
         />
         <div className="flex-1" />
-        <input
-          value={addPlate}
-          onChange={(e) => setAddPlate(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAddPlate()}
-          placeholder="Add plate manually…"
-          className="max-w-[200px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-        />
-        <button
-          onClick={handleAddPlate}
-          disabled={isAdding || !addPlate.trim()}
-          className="rounded-[7px] border border-line bg-panel-raised px-3 py-1.5 text-sm text-fg hover:border-amber disabled:opacity-50"
+        <select
+          value=""
+          onChange={(e) => e.target.value && handleAddCar(e.target.value)}
+          disabled={isAdding || addableCars.length === 0}
+          className="max-w-[260px] rounded-[7px] bg-amber px-3 py-1.5 text-sm font-semibold text-amber-fg outline-none hover:brightness-110 disabled:opacity-50"
         >
-          {isAdding ? "Adding…" : "+ Add"}
-        </button>
+          <option value="">
+            {isAdding
+              ? "Adding…"
+              : addableCars.length === 0
+                ? "+ Add car (none available)"
+                : "+ Add car for deposit…"}
+          </option>
+          {addableCars.map((car) => (
+            <option key={car.id} value={car.id}>
+              {car.vin} - {car.vehicle}
+            </option>
+          ))}
+        </select>
       </div>
       {addError && <p className="-mt-2 mb-4 text-xs text-danger">{addError}</p>}
 

@@ -10,7 +10,6 @@ import {
   setSigningDate as saveSigningDate,
   type DepositMethod,
 } from "@/lib/depositPayments";
-import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
 export async function logDepositPayment(formData: FormData) {
   const { profile } = await requireStaff();
@@ -51,17 +50,16 @@ export async function logDepositPayment(formData: FormData) {
   revalidatePath("/deposits");
 }
 
-/** "Add plate manually" - starts tracking a car that isn't auto-listed (e.g. not currently Loan Approved) so staff can log a payment against it. */
-export async function addDepositCarByPlate(plate: string) {
+/**
+ * Starts tracking a car that isn't auto-listed (Loan Submission/Available,
+ * not yet Loan Approved) so staff can log a payment against it early. The
+ * car is picked from a live-fetched list client-side, so its id/plate/model
+ * are trusted here the same way logDepositPayment already trusts them.
+ */
+export async function addDepositCar(stockBoardVehicleId: string, noPlate: string, vehicle: string) {
   await requireStaff();
-  const trimmed = plate.trim();
-  if (!trimmed) throw new Error("Enter a plate number.");
-
-  const vehicles = await fetchStockBoardVehicles();
-  const vehicle = findByPlate(trimmed, vehicles);
-  if (!vehicle) throw new Error(`No car on the Stock Board matches plate "${trimmed}".`);
-
-  await ensureCarDeposit(vehicle.id, vehicle.vin, vehicle.vehicle);
+  if (!stockBoardVehicleId || !noPlate) throw new Error("Missing car reference.");
+  await ensureCarDeposit(stockBoardVehicleId, noPlate, vehicle);
   revalidatePath("/deposits");
 }
 

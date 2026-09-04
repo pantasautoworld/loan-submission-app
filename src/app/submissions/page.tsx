@@ -36,7 +36,7 @@ export default async function SubmissionsPage() {
   return (
     <div className="flex flex-1 flex-col">
       <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Submissions"]} />
-      <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
+      <main className="mx-auto w-full max-w-[1200px] flex-1 space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-xl text-fg">Submissions</h1>
           <Link

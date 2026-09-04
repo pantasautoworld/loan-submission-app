@@ -5,7 +5,8 @@ import { DownloadLink } from "@/components/DownloadLink";
 import { DeleteSubmissionButton } from "@/components/DeleteSubmissionButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { UndoSubmitButton } from "@/components/UndoSubmitButton";
-import { MALAYSIA_TZ } from "@/lib/timezone";
+import { SubmissionsMonthPicker } from "@/components/SubmissionsMonthPicker";
+import { MALAYSIA_TZ, malaysiaDateParts, malaysiaMonthStartIso } from "@/lib/timezone";
 
 /**
  * This page renders server-side, where the host's system timezone (UTC on
@@ -23,28 +24,74 @@ function formatMalaysiaDateTime(iso: string): string {
   return `${datePart} ${timePart}`;
 }
 
-export default async function SubmissionsPage() {
+export default async function SubmissionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const { profile, supabase } = await requireStaff();
+  const { month: monthParam } = await searchParams;
+
+  // Computed in Malaysia time (not the server's own UTC) so "this month" matches
+  // what staff actually mean, especially near a day/month boundary.
+  const { year: currentYear, month: currentMonth } = malaysiaDateParts();
+
+  // The dropdown only ever offers the last 12 months, but validate anyway in
+  // case someone edits the URL by hand - anything unparseable or in the
+  // future just falls back to the current month.
+  let myYear = currentYear;
+  let myMonth = currentMonth;
+  const parsedMonth = monthParam?.match(/^(\d{4})-(\d{2})$/);
+  if (parsedMonth) {
+    const y = Number(parsedMonth[1]);
+    const m = Number(parsedMonth[2]);
+    if (y < currentYear || (y === currentYear && m <= currentMonth)) {
+      myYear = y;
+      myMonth = m;
+    }
+  }
+
+  const monthStart = malaysiaMonthStartIso(myYear, myMonth);
+  const monthEnd = malaysiaMonthStartIso(myYear, myMonth + 1);
+  const monthLabel = new Date(Date.UTC(myYear, myMonth - 1, 1)).toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(currentYear, currentMonth - 1 - i, 1));
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth() + 1;
+    return {
+      value: `${y}-${String(m).padStart(2, "0")}`,
+      label: d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+    };
+  });
 
   const { data: submissions } = await supabase
     .from("submissions")
     .select(
       "id, ticket_no, status, submitted_at, no_plate, model, created_at, created_by, profiles:created_by(full_name), persons(role, name), generated_documents(pdf_path, generated_at, kind)"
     )
+    .gte("created_at", monthStart)
+    .lt("created_at", monthEnd)
     .order("created_at", { ascending: false });
 
   return (
     <div className="flex flex-1 flex-col">
       <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Submissions"]} />
       <main className="mx-auto w-full max-w-[1200px] flex-1 space-y-4 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <h1 className="font-display text-xl text-fg">Submissions</h1>
-          <Link
-            href="/submissions/new"
-            className="rounded-[7px] bg-amber px-3 py-1.5 text-sm font-semibold text-amber-fg hover:brightness-110"
-          >
-            New Submission
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <SubmissionsMonthPicker options={monthOptions} value={`${myYear}-${String(myMonth).padStart(2, "0")}`} />
+            <Link
+              href="/submissions/new"
+              className="rounded-[7px] bg-amber px-3 py-1.5 text-sm font-semibold text-amber-fg hover:brightness-110"
+            >
+              New Submission
+            </Link>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-[10px] border border-line bg-panel">
@@ -134,7 +181,7 @@ export default async function SubmissionsPage() {
               {(!submissions || submissions.length === 0) && (
                 <tr>
                   <td colSpan={8} className="px-3 py-6 text-center text-muted">
-                    No submissions yet.
+                    No submissions created in {monthLabel}.
                   </td>
                 </tr>
               )}

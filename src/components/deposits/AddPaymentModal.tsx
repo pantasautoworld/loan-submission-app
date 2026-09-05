@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { logDepositPayment } from "@/app/deposits/actions";
 import { DEPOSIT_METHODS, type DepositMethod } from "@/lib/depositPayments";
+import { malaysiaTodayIso } from "@/lib/timezone";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
@@ -21,6 +22,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
   const [receiptNumber, setReceiptNumber] = useState("");
   const [method, setMethod] = useState<DepositMethod | "">("");
   const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(malaysiaTodayIso());
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +37,10 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       setError("Select a deposit method.");
       return;
     }
+    if (!paymentDate) {
+      setError("Pick the payment date.");
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -46,6 +52,7 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
       formData.set("receiptNumber", receiptNumber.trim());
       formData.set("method", method);
       formData.set("amount", amount);
+      formData.set("paymentDate", paymentDate);
       if (file) formData.set("receipt", file);
       await logDepositPayment(formData);
       onSaved();
@@ -77,13 +84,26 @@ export function AddPaymentModal({ stockBoardVehicleId, noPlate, vehicle, onClose
           ))}
         </select>
 
-        <label className={LABEL}>Amount (RM)</label>
-        <input
-          type="number"
-          className={FIELD}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className={LABEL}>Amount (RM)</label>
+            <input
+              type="number"
+              className={FIELD}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Payment date</label>
+            <input
+              type="date"
+              className={FIELD}
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+            />
+          </div>
+        </div>
 
         <label className={LABEL}>Receipt (if have)</label>
         <input

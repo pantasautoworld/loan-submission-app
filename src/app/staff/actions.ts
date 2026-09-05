@@ -91,6 +91,17 @@ export async function updateStaffRole(profileId: string, role: "admin" | "sales"
   revalidatePath("/staff");
 }
 
+export async function updateStaffActive(profileId: string, isActive: boolean) {
+  const { profile, supabase } = await requireAdmin();
+  if (profileId === profile.id && !isActive) {
+    throw new Error("You can't deactivate your own account.");
+  }
+  const { error } = await supabase.from("profiles").update({ is_active: isActive }).eq("id", profileId);
+  if (error) throw new Error("Could not update the account status.");
+  revalidatePath("/staff");
+  revalidatePath("/stock-board");
+}
+
 export async function deleteStaff(profileId: string) {
   const { profile } = await requireAdmin();
   if (profileId === profile.id) {

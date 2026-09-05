@@ -5,6 +5,7 @@ import {
   createStaff,
   deleteStaff,
   resetStaffPassword,
+  updateStaffActive,
   updateStaffPhoto,
   updateStaffRole,
 } from "@/app/staff/actions";
@@ -17,6 +18,7 @@ interface StaffRow {
   username: string | null;
   role: "admin" | "sales" | string;
   photoUrl: string | null;
+  is_active: boolean;
 }
 
 const FIELD =
@@ -231,6 +233,24 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
     });
   }
 
+  function handleToggleActive() {
+    const nextActive = !staff.is_active;
+    if (!nextActive) {
+      const ok = confirm(
+        `Deactivate "${staff.full_name}"? They'll disappear from staff pickers (like the Stock Board filter) but keep their login and history. You can reactivate anytime.`
+      );
+      if (!ok) return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateStaffActive(staff.id, nextActive);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not update account status.");
+      }
+    });
+  }
+
   function handleDelete() {
     const ok = confirm(`Delete staff account "${staff.full_name}"? This cannot be undone.`);
     if (!ok) return;
@@ -245,13 +265,14 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
   }
 
   return (
-    <div className="rounded-[10px] border border-line bg-panel p-4">
+    <div className={`rounded-[10px] border border-line bg-panel p-4 ${!staff.is_active ? "opacity-60" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <RowAvatar name={staff.full_name} photoUrl={staff.photoUrl} className="h-16 w-16 text-lg" />
           <div>
             <p className="font-medium text-fg">
               {staff.full_name} {isSelf && <span className="text-xs text-muted">(you)</span>}
+              {!staff.is_active && <span className="ml-2 text-xs text-muted">(inactive)</span>}
             </p>
             <p className="text-xs text-muted">@{staff.username ?? "-"}</p>
           </div>
@@ -282,6 +303,15 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
           >
             Reset password
           </button>
+          {!isSelf && (
+            <button
+              onClick={handleToggleActive}
+              disabled={isPending}
+              className="text-xs text-amber hover:underline disabled:opacity-50"
+            >
+              {staff.is_active ? "Deactivate" : "Activate"}
+            </button>
+          )}
           {!isSelf && (
             <button
               onClick={handleDelete}

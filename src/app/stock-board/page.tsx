@@ -8,7 +8,7 @@ export default async function StockBoardPage() {
   const { profile, supabase } = await requireStaff();
 
   const [{ data: staff }, depositTotals, puspakomCompletedIds] = await Promise.all([
-    supabase.from("profiles").select("full_name").order("full_name"),
+    supabase.from("profiles").select("full_name").eq("is_active", true).order("full_name"),
     fetchApprovedDepositTotals(supabase),
     fetchCompletedPuspakomVehicleIds(supabase),
   ]);

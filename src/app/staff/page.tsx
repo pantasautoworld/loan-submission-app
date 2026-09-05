@@ -7,7 +7,7 @@ export default async function StaffPage() {
 
   const { data: staff } = await supabase
     .from("profiles")
-    .select("id, full_name, username, role, avatar_path")
+    .select("id, full_name, username, role, avatar_path, is_active")
     .order("full_name");
 
   const staffWithPhotos = (staff ?? []).map((s) => ({

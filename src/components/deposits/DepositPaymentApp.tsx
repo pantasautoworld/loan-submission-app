@@ -97,6 +97,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryMonth, setSummaryMonth] = useState(monthOptions[0].value);
+  const [search, setSearch] = useState("");
 
   // Shared with the downloadable PDF (see /api/deposits/summary-pdf) so the two never drift apart.
   const monthlySummary = useMemo(
@@ -129,8 +130,10 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
   // Every car with at least one payment logged - pending ones show up here too now,
   // not just approved, so admin can approve/reject straight from the website.
+  const plateQuery = search.trim().toLowerCase();
   const trackedCars = vehicles
     .filter((v) => deposits.some((d) => d.stock_board_vehicle_id === v.id && d.payments.length > 0))
+    .filter((v) => !plateQuery || v.vin.toLowerCase().includes(plateQuery))
     .sort((a, b) => {
       const da = deposits.find((d) => d.stock_board_vehicle_id === a.id);
       const db = deposits.find((d) => d.stock_board_vehicle_id === b.id);
@@ -141,7 +144,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
   return (
     <div className="mx-auto max-w-[1000px] px-6 py-5">
-      <div className="mb-4 flex flex-wrap gap-2.5">
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <button
           onClick={() => setAddingDeposit(true)}
           className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
@@ -154,6 +157,12 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
         >
           {showSummary ? "Hide monthly summary" : "Monthly summary"}
         </button>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search number plate…"
+          className="max-w-[220px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        />
       </div>
 
       {showSummary && (
@@ -242,7 +251,9 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
 
       {trackedCars.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-16 text-center text-sm text-muted">
-          No deposits logged yet. Use &quot;+ Add deposit&quot; to log one.
+          {plateQuery
+            ? `No tracked car matches "${search.trim()}".`
+            : <>No deposits logged yet. Use &quot;+ Add deposit&quot; to log one.</>}
         </div>
       ) : (
         <div className="space-y-4">

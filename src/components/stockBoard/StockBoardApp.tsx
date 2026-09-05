@@ -76,7 +76,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
-  const [depositFilter, setDepositFilter] = useState<"" | "pending" | "fully_paid" | "received">("");
+  const [depositFilter, setDepositFilter] = useState<"" | "no_booking" | "received">("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -139,14 +139,8 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
       if (staffFilter && v.submittedBy !== staffFilter) return false;
       if (depositFilter === "received") {
         if ((depositTotals[v.id] ?? 0) <= 0) return false; // no approved payment yet
-      } else if (depositFilter) {
-        const required = Number(v.deposit) || 0;
-        if (required <= 0) return false; // no deposit set - not applicable either way
-        const collected = depositTotals[v.id] ?? 0;
-        const fullyPaid = collected >= required;
-        if (depositFilter === "fully_paid" && !fullyPaid) return false;
-        // "Pending" matches the card's tag - only once a first payment has landed.
-        if (depositFilter === "pending" && (fullyPaid || collected <= 0)) return false;
+      } else if (depositFilter === "no_booking") {
+        if ((depositTotals[v.id] ?? 0) > 0) return false; // already has at least one approved payment
       }
       if (!q) return true;
       return `${v.vehicle} ${v.vin}`.toLowerCase().includes(q);
@@ -212,7 +206,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
               key={s.label}
               onClick={() => {
                 if (s.type === "deposit") {
-                  setDepositFilter(s.key as "" | "pending" | "fully_paid" | "received");
+                  setDepositFilter(s.key as "" | "no_booking" | "received");
                 } else {
                   setStatusFilter(s.key);
                   if (s.key === "") setDepositFilter("");
@@ -258,12 +252,12 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
         </select>
         <select
           value={depositFilter}
-          onChange={(e) => setDepositFilter(e.target.value as "" | "pending" | "fully_paid" | "received")}
+          onChange={(e) => setDepositFilter(e.target.value as "" | "no_booking" | "received")}
           className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
         >
           <option value="">All deposits</option>
-          <option value="pending">Deposit pending</option>
-          <option value="fully_paid">Fully deposited</option>
+          <option value="no_booking">No booking</option>
+          <option value="received">Booking paid</option>
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}

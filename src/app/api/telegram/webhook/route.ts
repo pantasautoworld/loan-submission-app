@@ -13,6 +13,7 @@ import { attachClaimInvoiceGrant, CLAIM_INVOICE_FINANCIER, createClaimInvoice } 
 import { extractGrantDetails } from "@/lib/anthropic";
 import { buildClaimInvoicePdf } from "@/lib/pdf/claimInvoicePdf";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { malaysiaTodayIso } from "@/lib/timezone";
 import {
   advanceInvoiceDraftToDeposit,
   advanceInvoiceDraftToLoan,
@@ -231,6 +232,7 @@ async function handleDepositPhoto(
       method: "",
       receiptNumber: "",
       amount: parsed.amount,
+      paymentDate: malaysiaTodayIso(),
       receiptBytes: bytes,
       receiptExt: "jpg",
       uploadedByProfileId: null,

@@ -11,12 +11,16 @@ import {
   type DepositMethod,
 } from "@/lib/depositPayments";
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
+import { malaysiaTodayIso } from "@/lib/timezone";
 
 async function extractPaymentFields(formData: FormData) {
   const note = String(formData.get("note") ?? "").trim();
   const receiptNumber = String(formData.get("receiptNumber") ?? "").trim();
   const methodRaw = String(formData.get("method") ?? "");
   const amount = Number(formData.get("amount"));
+  // Not every entry point has a date picker (e.g. the per-car "+ Add payment" modal) -
+  // those fall back to today, same as before this field existed.
+  const paymentDate = String(formData.get("paymentDate") ?? "").trim() || malaysiaTodayIso();
   const file = formData.get("receipt") as File | null;
 
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount.");
@@ -26,7 +30,7 @@ async function extractPaymentFields(formData: FormData) {
   const receiptBytes = hasReceipt ? Buffer.from(await file.arrayBuffer()) : null;
   const receiptExt = hasReceipt ? (file.name.split(".").pop() || "jpg").toLowerCase() : null;
 
-  return { note, receiptNumber, method: methodRaw as DepositMethod, amount, receiptBytes, receiptExt };
+  return { note, receiptNumber, method: methodRaw as DepositMethod, amount, paymentDate, receiptBytes, receiptExt };
 }
 
 /** Used by each already-tracked car's own "+ Add payment" button, where the car is already known. */

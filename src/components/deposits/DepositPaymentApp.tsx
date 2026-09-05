@@ -229,7 +229,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                   <div className="text-right text-xs text-muted">
                     <span className="font-mono text-sm font-semibold text-fg">{fmtMoney(r.amount)}</span>
                     <span className="ml-2">
-                      {r.method || "—"} · {fmtDate(r.uploadedAt)} · Submitted by {r.uploadedBy}
+                      {r.method || "—"} · {fmtDate(r.paymentDate)} · Submitted by {r.uploadedBy}
                       {r.approvedBy ? ` · Approved by ${r.approvedBy}` : ""}
                     </span>
                   </div>
@@ -285,7 +285,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                           )}
                           {p.note && <span className="ml-2 text-muted italic">{p.note}</span>}
                           <div className="text-[11px] text-muted">
-                            By {p.uploaded_by_name} · {fmtDate(p.uploaded_at)}
+                            By {p.uploaded_by_name} · {fmtDate(p.payment_date)}
                             {p.status !== "pending" && p.approved_by_name
                               ? ` · ${STATUS_LABEL[p.status]} by ${p.approved_by_name}`
                               : ""}

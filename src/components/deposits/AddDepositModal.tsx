@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { logDepositPaymentByPlate } from "@/app/deposits/actions";
 import { DEPOSIT_METHODS, type DepositMethod } from "@/lib/depositPayments";
+import { malaysiaTodayIso } from "@/lib/timezone";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 
 const FIELD =
@@ -25,6 +26,7 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
   const [receiptNumber, setReceiptNumber] = useState("");
   const [method, setMethod] = useState<DepositMethod | "">("");
   const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(malaysiaTodayIso());
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,6 +55,10 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
       setError("Select a deposit method.");
       return;
     }
+    if (!paymentDate) {
+      setError("Pick the payment date.");
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -62,6 +68,7 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
       formData.set("receiptNumber", receiptNumber.trim());
       formData.set("method", method);
       formData.set("amount", amount);
+      formData.set("paymentDate", paymentDate);
       if (file) formData.set("receipt", file);
       await logDepositPaymentByPlate(formData);
       onSaved();
@@ -122,21 +129,52 @@ export function AddDepositModal({ vehicles, onClose, onSaved }: Props) {
           ))}
         </select>
 
-        <label className={LABEL}>Amount (RM)</label>
-        <input
-          type="number"
-          className={FIELD}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className={LABEL}>Amount (RM)</label>
+            <input
+              type="number"
+              className={FIELD}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Payment date</label>
+            <input
+              type="date"
+              className={FIELD}
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+            />
+          </div>
+        </div>
 
         <label className={LABEL}>Receipt (if have)</label>
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          className={FIELD}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
+        <div className="mb-3">
+          <div className="flex gap-2">
+            <label className="flex flex-1 cursor-pointer items-center justify-center rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg hover:border-amber">
+              📷 Take photo
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="flex flex-1 cursor-pointer items-center justify-center rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg hover:border-amber">
+              Choose file
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          {file && <p className="mt-1.5 truncate text-xs text-muted">Selected: {file.name}</p>}
+        </div>
 
         <label className={LABEL}>Receipt No. (if have)</label>
         <input

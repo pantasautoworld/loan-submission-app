@@ -107,7 +107,7 @@ export async function buildDepositSummaryPdf(
       r.method || "-",
       truncate(r.uploadedBy, 18),
       truncate(r.approvedBy ?? "-", 18),
-      fmtDate(r.uploadedAt),
+      fmtDate(r.paymentDate),
     ];
     cells.forEach((cell, i) => {
       page.drawText(cell, { x: COLUMNS[i].x + 3, y, size: 8, font });

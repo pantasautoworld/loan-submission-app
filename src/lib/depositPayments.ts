@@ -27,6 +27,8 @@ export interface DepositPaymentRow {
   uploaded_by_name: string;
   source: "app" | "telegram";
   uploaded_at: string;
+  /** The actual date the payment was made (staff-entered) - not necessarily the same day it was uploaded/approved. */
+  payment_date: string;
   approved_by_name: string | null;
   approved_at: string | null;
   telegram_messages: { chat_id: string; message_id: number; has_photo: boolean }[];
@@ -52,7 +54,7 @@ export interface MonthlyDepositSummaryRow {
   amount: number;
   method: string;
   uploadedBy: string;
-  uploadedAt: string;
+  paymentDate: string;
   approvedBy: string | null;
 }
 
@@ -66,10 +68,11 @@ export interface MonthlyDepositSummary {
 
 /**
  * Approved payments that landed in the given "YYYY-MM" month (bucketed by
- * uploaded_at, i.e. when the customer actually paid, in Malaysia time) -
- * shared by the on-page Monthly summary panel and the downloadable PDF so
- * the two can never drift apart. Still-pending payments from the same
- * month are only counted, not listed.
+ * payment_date, the staff-entered date money actually changed hands, not
+ * necessarily the same day it was uploaded/approved) - shared by the
+ * on-page Monthly summary panel and the downloadable PDF so the two can
+ * never drift apart. Still-pending payments from the same month are only
+ * counted, not listed.
  */
 export function summarizeApprovedDepositsForMonth(
   deposits: { no_plate: string; vehicle: string; payments: DepositPaymentRow[] }[],
@@ -80,7 +83,8 @@ export function summarizeApprovedDepositsForMonth(
 
   for (const d of deposits) {
     for (const p of d.payments) {
-      if (!p.uploaded_at || malaysiaYearMonth(new Date(p.uploaded_at)) !== month) continue;
+      const dateKey = p.payment_date ?? p.uploaded_at;
+      if (!dateKey || malaysiaYearMonth(new Date(dateKey)) !== month) continue;
       if (p.status === "approved") {
         rows.push({
           paymentId: p.id,
@@ -89,7 +93,7 @@ export function summarizeApprovedDepositsForMonth(
           amount: p.amount,
           method: p.method,
           uploadedBy: p.uploaded_by_name,
-          uploadedAt: p.uploaded_at,
+          paymentDate: dateKey,
           approvedBy: p.approved_by_name,
         });
       } else if (p.status === "pending") {
@@ -97,7 +101,7 @@ export function summarizeApprovedDepositsForMonth(
       }
     }
   }
-  rows.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  rows.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
 
   const byMethod = new Map<string, number>();
   for (const r of rows) {
@@ -215,6 +219,7 @@ export interface RecordDepositPaymentInput {
   method: DepositMethod | "";
   receiptNumber: string;
   amount: number;
+  paymentDate: string;
   receiptBytes: Buffer | null;
   receiptExt: string | null;
   uploadedByProfileId: string | null;
@@ -261,6 +266,7 @@ export async function recordDepositPayment(
       method: input.method,
       receipt_number: input.receiptNumber,
       amount: input.amount,
+      payment_date: input.paymentDate,
       status: "pending",
       uploaded_by: input.uploadedByProfileId,
       uploaded_by_name: input.uploadedByName,

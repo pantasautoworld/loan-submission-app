@@ -278,6 +278,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                     {payments.map((p) => (
                       <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
                         <div>
+                          <div className="text-xs font-semibold text-fg">{fmtDate(p.payment_date)}</div>
                           <span className="font-mono font-semibold text-fg">{fmtMoney(p.amount)}</span>
                           {p.method && <span className="ml-2 text-muted">{p.method}</span>}
                           {p.receipt_number && (
@@ -285,7 +286,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                           )}
                           {p.note && <span className="ml-2 text-muted italic">{p.note}</span>}
                           <div className="text-[11px] text-muted">
-                            By {p.uploaded_by_name} · {fmtDate(p.payment_date)}
+                            By {p.uploaded_by_name}
                             {p.status !== "pending" && p.approved_by_name
                               ? ` · ${STATUS_LABEL[p.status]} by ${p.approved_by_name}`
                               : ""}

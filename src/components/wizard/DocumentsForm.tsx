@@ -57,6 +57,13 @@ const IC_ROLES: Partial<Record<DocType, PersonRole>> = {
   guarantor2_ic: "guarantor2",
 };
 
+// IC-back scans - only the old IC number (if printed) is extracted, for the ELK Info tab
+const IC_BACK_ROLES: Partial<Record<DocType, PersonRole>> = {
+  hirer_ic_back: "hirer",
+  guarantor1_ic_back: "guarantor1",
+  guarantor2_ic_back: "guarantor2",
+};
+
 // where staff should go to key in Name/NRIC manually if the scan can't read it
 const IC_TAB_LABELS: Partial<Record<DocType, string>> = {
   hirer_ic: "Hirer Info",
@@ -211,15 +218,29 @@ export function DocumentsForm({
             [docType]: `Could not read the Name clearly - please key it in manually at ${tabLabel}.`,
           }));
         }
+      } else if (docType in IC_BACK_ROLES) {
+        const icBackRole = IC_BACK_ROLES[docType]!;
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/extract/ic-back", { method: "POST", body });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Scan failed");
+        if (data.oldIc) {
+          await savePerson(submissionId, icBackRole, { old_ic: data.oldIc });
+          onPersonExtracted(icBackRole, { old_ic: data.oldIc });
+        }
       } else if (docType === "tnb_bill") {
         const body = new FormData();
         body.append("file", file);
         const res = await fetch("/api/extract/bill", { method: "POST", body });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Scan failed");
-        if (data.address) {
-          await savePerson(submissionId, "hirer", { address: data.address });
-          onPersonExtracted("hirer", { address: data.address });
+        const fields: Record<string, string> = {};
+        if (data.address) fields.address = data.address;
+        if (data.accountNo) fields.tnb_account_no = data.accountNo;
+        if (Object.keys(fields).length > 0) {
+          await savePerson(submissionId, "hirer", fields);
+          onPersonExtracted("hirer", fields);
         }
       } else if (docType === "car_voc") {
         const body = new FormData();

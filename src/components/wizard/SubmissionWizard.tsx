@@ -5,6 +5,7 @@ import { PersonForm } from "./PersonForm";
 import { VehicleForm } from "./VehicleForm";
 import { DocumentsForm } from "./DocumentsForm";
 import { IncomeDocumentsForm } from "./IncomeDocumentsForm";
+import { ElkInfoForm } from "./ElkInfoForm";
 import { SigningStep } from "./SigningStep";
 import { GenerateStep } from "./GenerateStep";
 import { removePerson } from "@/app/submissions/[id]/edit/actions";
@@ -13,6 +14,7 @@ import type { PersonRow, PersonRole, PersonFields, SubmissionRow, DocumentRow } 
 const STEPS = [
   "documents",
   "income",
+  "elk_info",
   "vehicle",
   "hirer",
   "guarantor1",
@@ -29,6 +31,7 @@ const STEP_META: Record<Step, { title: string; subtitle: string }> = {
   guarantor2: { title: "Guarantor 2", subtitle: "2nd Guarantor Details" },
   documents: { title: "Attachments", subtitle: "Hirer & Guarantor Documents" },
   income: { title: "Income Documents", subtitle: "Payslips & EPF/KWSP" },
+  elk_info: { title: "ELK Info", subtitle: "Old IC, TNB & EPF Nos." },
   signing: { title: "Signing", subtitle: "E-Signature" },
   generate: { title: "Generate", subtitle: "Compile & Download" },
 };
@@ -103,6 +106,9 @@ export function SubmissionWizard({
         company_name: "",
         company_registration: "",
         company_address: "",
+        old_ic: "",
+        epf_no: "",
+        tnb_account_no: "",
         signature_path: null,
         signed_name: null,
         signed_at: null,
@@ -249,6 +255,15 @@ export function SubmissionWizard({
           <IncomeDocumentsForm
             submissionId={submission.id}
             documents={documents}
+            showGuarantor2={hasGuarantor2}
+            persons={persons}
+            onPersonExtracted={updatePersonFields}
+          />
+        )}
+
+        {step === "elk_info" && (
+          <ElkInfoForm
+            submissionId={submission.id}
             showGuarantor2={hasGuarantor2}
             persons={persons}
             onPersonExtracted={updatePersonFields}

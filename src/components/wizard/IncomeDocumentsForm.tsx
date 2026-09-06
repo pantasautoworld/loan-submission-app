@@ -60,6 +60,11 @@ const SECTIONS: {
   },
 ];
 
+// epf doc types that trigger OCR extraction of the KWSP member/account number, for the ELK Info tab
+const EPF_ROLES: Partial<Record<DocType, IncomeRole>> = Object.fromEntries(
+  SECTIONS.map((s) => [s.epfDoc, s.role])
+);
+
 interface CompanyDetails {
   company_name: string;
   company_registration: string;
@@ -133,6 +138,18 @@ export function IncomeDocumentsForm({
       );
       await recordCombinedDocument(submissionId, docType, paths);
       setUploaded((s) => new Set(s).add(docType));
+
+      const epfRole = EPF_ROLES[docType];
+      if (epfRole) {
+        const body = new FormData();
+        body.append("file", files[0]);
+        const res = await fetch("/api/extract/epf", { method: "POST", body });
+        const data = await res.json();
+        if (res.ok && data.epfNo) {
+          await savePerson(submissionId, epfRole, { epf_no: data.epfNo });
+          onPersonExtracted(epfRole, { epf_no: data.epfNo });
+        }
+      }
     } catch (err) {
       setScanError((e) => ({
         ...e,

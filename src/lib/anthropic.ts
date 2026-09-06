@@ -84,12 +84,35 @@ export async function extractIc(source: DocSource): Promise<IcExtraction> {
 
 export interface BillExtraction {
   address: string;
+  accountNo: string;
 }
 
 export async function extractBillAddress(source: DocSource): Promise<BillExtraction> {
   return extractJson<BillExtraction>(
     source,
-    `This is a Malaysian electricity (TNB) or water utility bill. Read the customer's billing/service address exactly as printed (the address the utility is billed to, not TNB's own company address). The customer's name is usually printed as its own line directly above the address - do NOT include that name line in the result, only the actual address lines (unit/house no., street, area, postcode, city, state). Return {"address": string} as a single string with the address lines only, joined by ", ". If it can't be read, use an empty string.`
+    `This is a Malaysian electricity (TNB) or water utility bill. Read the customer's billing/service address exactly as printed (the address the utility is billed to, not TNB's own company address). The customer's name is usually printed as its own line directly above the address - do NOT include that name line in the result, only the actual address lines (unit/house no., street, area, postcode, city, state). Separately, read the account number labelled "No. Akaun" / "Account No." Return {"address": string, "accountNo": string} - address as a single string with the address lines only, joined by ", ". Use an empty string for either field you cannot confidently read.`
+  );
+}
+
+export interface OldIcExtraction {
+  oldIc: string;
+}
+
+export async function extractOldIc(source: DocSource): Promise<OldIcExtraction> {
+  return extractJson<OldIcExtraction>(
+    source,
+    `This is the BACK of a Malaysian identity card (MyKad). Some MyKads have an older-format IC number printed on the back, usually in small text below or near the main NRIC digits - this "old IC" is in a different, shorter format than the standard 12-digit NRIC (e.g. a letter followed by 6-8 digits, or a plain number without dashes). Read that old IC number if it is present. Return {"oldIc": string}. If no such number is printed on the back, or it isn't clearly legible, return an empty string - do not guess, and do not return the standard 12-digit NRIC.`
+  );
+}
+
+export interface EpfExtraction {
+  epfNo: string;
+}
+
+export async function extractEpfAccountNo(source: DocSource): Promise<EpfExtraction> {
+  return extractJson<EpfExtraction>(
+    source,
+    `This is a Malaysian EPF/KWSP statement ("Penyata KWSP" / "Penyata Faedah"). Read the member's account number, labelled "No. Ahli KWSP" / "KWSP Member No." / "Member Account No." Return {"epfNo": string}. Use an empty string if it can't be confidently read.`
   );
 }
 

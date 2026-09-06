@@ -58,6 +58,9 @@ export interface PersonRow {
   company_name: string;
   company_registration: string;
   company_address: string;
+  old_ic: string;
+  epf_no: string;
+  tnb_account_no: string;
   signature_path: string | null;
   signed_name: string | null;
   signed_at: string | null;

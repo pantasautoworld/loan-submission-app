@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Every claim invoice goes through the same financier - not a per-invoice choice. */
-export const CLAIM_INVOICE_FINANCIER = "ELK";
+export const CLAIM_INVOICE_FINANCIER = "ELK-Desa Capital Sdn Bhd";
 
 export interface ClaimInvoiceRow {
   id: string;

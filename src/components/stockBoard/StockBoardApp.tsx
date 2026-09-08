@@ -325,14 +325,13 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                     >
                       {STATUS_LABEL[v.status] ?? v.status}
                     </span>
-                    {depositFullyPaid && (
-                      <span className="rounded-full border border-status-deposit-paid px-2.5 py-0.5 text-[11px] font-semibold text-status-deposit-paid">
-                        Fully deposited
-                      </span>
-                    )}
-                    {depositPending && (
-                      <span className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber">
-                        Deposit pending
+                    {(depositFullyPaid || depositPending) && (
+                      <span
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                          depositFullyPaid ? "border-success text-success" : "border-danger text-danger"
+                        }`}
+                      >
+                        RM{depositCollected.toLocaleString()} of RM{depositRequired.toLocaleString()}
                       </span>
                     )}
                     {v.company && (

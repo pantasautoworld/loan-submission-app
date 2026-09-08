@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ClaimInvoiceRow } from "@/lib/claimInvoices";
@@ -12,6 +12,26 @@ const CHOP_PATH = "templates/kiwi-chop.jpg";
 
 function fmtMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+/** Greedily wraps text to fit maxWidth, splitting on whitespace - used for the buyer
+ * address, which often has no commas to split on and would otherwise run into the
+ * invoice-meta column drawn to its right. */
+function wrapText(text: string, maxWidth: number, font: PDFFont, size: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
 }
 
 function fmtDate(iso: string): string {
@@ -71,13 +91,16 @@ export async function buildClaimInvoicePdf(invoice: ClaimInvoiceRow): Promise<Bu
 
   // Bill-to (left) / invoice meta (right)
   const rightX = MARGIN + 300;
+  const buyerColWidth = rightX - MARGIN - 20; // leave a gap before the invoice-meta column
   const topOfBlock = y;
   const buyerLines = invoice.buyer_name
     ? [invoice.buyer_name, ...invoice.buyer_address.split(",").map((s) => s.trim()).filter(Boolean)]
     : ["-"];
   for (const l of buyerLines) {
-    page.drawText(l, { x: MARGIN, y, size: 10, font });
-    y -= 13;
+    for (const wrapped of wrapText(l, buyerColWidth, font, 10)) {
+      page.drawText(wrapped, { x: MARGIN, y, size: 10, font });
+      y -= 13;
+    }
   }
 
   let ry = topOfBlock;

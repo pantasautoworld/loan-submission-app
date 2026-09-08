@@ -138,7 +138,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
       if (statusFilter && v.status !== statusFilter) return false;
       if (staffFilter && v.submittedBy !== staffFilter) return false;
       if (depositFilter === "received") {
-        if ((depositTotals[v.id] ?? 0) <= 0) return false; // no approved payment yet
+        if (v.status === "sold" || (depositTotals[v.id] ?? 0) <= 0) return false; // sold, or no approved payment yet
       } else if (depositFilter === "no_booking") {
         if ((depositTotals[v.id] ?? 0) > 0) return false; // already has at least one approved payment
       }
@@ -178,7 +178,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
   }
 
   const depositReceivedCount = useMemo(
-    () => vehicles.filter((v) => (depositTotals[v.id] ?? 0) > 0).length,
+    () => vehicles.filter((v) => v.status !== "sold" && (depositTotals[v.id] ?? 0) > 0).length,
     [vehicles, depositTotals]
   );
 

@@ -364,18 +364,6 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                       <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Required</span>
                       <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.deposit)}</span>
                     </div>
-                    {Number(v.deposit) > 0 && (
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Collected</span>
-                        <span
-                          className={`font-mono text-base font-semibold ${
-                            (depositTotals[v.id] ?? 0) >= Number(v.deposit) ? "text-success" : "text-fg"
-                          }`}
-                        >
-                          {fmtMoney(depositTotals[v.id] ?? 0)}
-                        </span>
-                      </div>
-                    )}
                     <div>
                       <span className="block text-[10px] uppercase tracking-wide text-muted">Tahun</span>
                       <span className="font-mono text-base font-semibold text-fg">{v.tahun || "—"}</span>

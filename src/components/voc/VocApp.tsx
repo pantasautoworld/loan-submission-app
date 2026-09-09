@@ -30,11 +30,13 @@ export function VocApp({ vehicles, documents }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const vehicleByPlate = useMemo(() => {
-    const map = new Map<string, StockBoardVehicle>();
-    for (const v of vehicles) map.set(normalizePlate(v.vin), v);
+  const [geranFilter, setGeranFilter] = useState<"" | "pending" | "ready">("");
+
+  const docByPlate = useMemo(() => {
+    const map = new Map<string, VocDocumentRow>();
+    for (const d of documents) map.set(d.no_plate, d);
     return map;
-  }, [vehicles]);
+  }, [documents]);
 
   const plateQuery = plate.trim().toLowerCase();
   const suggestions = plateQuery
@@ -42,7 +44,13 @@ export function VocApp({ vehicles, documents }: Props) {
     : vehicles;
 
   const q = search.trim().toLowerCase();
-  const filteredDocs = q ? documents.filter((d) => d.no_plate.toLowerCase().includes(q)) : documents;
+  const filteredVehicles = vehicles.filter((v) => {
+    const doc = docByPlate.get(normalizePlate(v.vin));
+    if (geranFilter === "pending" && doc) return false;
+    if (geranFilter === "ready" && !doc) return false;
+    if (q && !v.vin.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   async function handleUpload() {
     if (!plate.trim()) {
@@ -159,45 +167,73 @@ export function VocApp({ vehicles, documents }: Props) {
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search number plate…"
-        className="mb-3 max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-      />
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search number plate…"
+          className="max-w-[240px] rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        />
+        <select
+          value={geranFilter}
+          onChange={(e) => setGeranFilter(e.target.value as "" | "pending" | "ready")}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All Geran</option>
+          <option value="pending">Pending Geran</option>
+          <option value="ready">Ready Geran</option>
+        </select>
+      </div>
 
-      {filteredDocs.length === 0 ? (
+      {filteredVehicles.length === 0 ? (
         <div className="rounded-[10px] border border-line bg-panel py-12 text-center text-sm text-muted">
-          {documents.length === 0 ? "No VOCs on file yet." : "No VOCs match that plate."}
+          {vehicles.length === 0 ? "No stock on the board yet." : "No cars match."}
         </div>
       ) : (
         <div className="divide-y divide-line rounded-[10px] border border-line bg-panel">
-          {filteredDocs.map((doc) => {
-            const vehicle = vehicleByPlate.get(doc.no_plate);
+          {filteredVehicles.map((vehicle) => {
+            const doc = docByPlate.get(normalizePlate(vehicle.vin));
             return (
-              <div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5">
+              <div key={vehicle.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5">
                 <div className="flex items-center gap-3">
                   <div className="inline-flex items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-2.5 py-0.5 font-mono text-xs font-bold tracking-wide text-[#14171a]">
-                    {doc.no_plate}
+                    {vehicle.vin}
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-fg">{vehicle?.vehicle ?? "-"}</div>
+                    <div className="text-sm font-medium text-fg">{vehicle.vehicle}</div>
                     <div className="text-xs text-muted">
-                      Uploaded by {doc.uploaded_by_name} · {fmtDate(doc.uploaded_at)}
+                      {doc ? (
+                        <>
+                          Uploaded by {doc.uploaded_by_name} · {fmtDate(doc.uploaded_at)}
+                        </>
+                      ) : (
+                        "Not uploaded yet"
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => handleView(doc)} className="text-xs text-amber hover:underline">
-                    View
-                  </button>
-                  <button
-                    onClick={() => handleDelete(doc)}
-                    disabled={busyId === doc.id}
-                    className="text-xs text-muted hover:text-danger hover:underline disabled:opacity-50"
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-[#0d0f12] ${
+                      doc ? "bg-success" : "bg-danger"
+                    }`}
                   >
-                    {busyId === doc.id ? "…" : "Delete"}
-                  </button>
+                    {doc ? "Ready Geran" : "Pending Geran"}
+                  </span>
+                  {doc && (
+                    <>
+                      <button onClick={() => handleView(doc)} className="text-xs text-amber hover:underline">
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleDelete(doc)}
+                        disabled={busyId === doc.id}
+                        className="text-xs text-muted hover:text-danger hover:underline disabled:opacity-50"
+                      >
+                        {busyId === doc.id ? "…" : "Delete"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

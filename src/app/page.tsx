@@ -422,6 +422,45 @@ export default async function HomePage({
               Scan a grant and generate a sales invoice.
             </p>
           </Link>
+          <Link
+            href="/voc"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-prep/15 transition-colors group-hover:bg-status-prep/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <rect
+                  x="10"
+                  y="5"
+                  width="28"
+                  height="38"
+                  rx="3"
+                  fill="#F2F1EC"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <line x1="15" y1="13" x2="33" y2="13" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="15" y1="18" x2="33" y2="18" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="15" y1="23" x2="27" y2="23" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <circle cx="24" cy="35" r="10" fill="#a66dd4" stroke="#0f1115" strokeWidth="2.2" />
+                <text
+                  x="24"
+                  y="38.5"
+                  textAnchor="middle"
+                  fontFamily="Arial, Helvetica, sans-serif"
+                  fontWeight="700"
+                  fontSize="8.5"
+                  fill="#0f1115"
+                >
+                  VOC
+                </text>
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Vehicle Ownership Certificate</h2>
+            <p className="mt-1 text-sm text-muted">
+              Upload each car&apos;s VOC once - submissions attach it by plate.
+            </p>
+          </Link>
         </div>
 
         <div className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#6b21a8] via-[#c026d3] to-[#f97316] p-5 shadow-xl">

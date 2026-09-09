@@ -31,19 +31,37 @@ export async function fetchPuspakomBookings(supabase: SupabaseClient): Promise<P
   return (data ?? []) as PuspakomBookingRow[];
 }
 
+export interface PuspakomStatusInfo {
+  status: "scheduled" | "completed";
+  /** ISO date (YYYY-MM-DD) of the appointment - the actual inspection date once completed. */
+  appointmentDate: string;
+}
+
 /**
- * Which Stock Board cars have at least one completed booking - B5 and B7 are
- * done together in a single visit, so this is one flag per car (both tags
- * show together), not tracked per inspection type. Returned as a plain array
- * (not a Set) so it serializes cleanly across the server/client boundary.
+ * Each Stock Board car's most recent Puspakom booking (B5 and B7 are done
+ * together in one visit, so this is one status per car, not per inspection
+ * type). A car can be re-booked after its previous inspection expires, so
+ * this takes the latest booking by appointment date regardless of status -
+ * not just "has any completed booking ever" - so a fresh re-booking
+ * correctly shows as pending again. Keyed by Stock Board vehicle id, plain
+ * object so it serializes cleanly across the server/client boundary.
  */
-export async function fetchCompletedPuspakomVehicleIds(supabase: SupabaseClient): Promise<string[]> {
+export async function fetchLatestPuspakomStatusByVehicle(
+  supabase: SupabaseClient
+): Promise<Record<string, PuspakomStatusInfo>> {
   const { data, error } = await supabase
     .from("puspakom_bookings")
-    .select("stock_board_vehicle_id")
-    .eq("status", "completed");
+    .select("stock_board_vehicle_id, status, appointment_date")
+    .order("appointment_date", { ascending: false });
   if (error) throw new Error(error.message);
-  return [...new Set((data ?? []).map((r) => r.stock_board_vehicle_id as string))];
+  const result: Record<string, PuspakomStatusInfo> = {};
+  for (const row of data ?? []) {
+    const id = row.stock_board_vehicle_id as string;
+    if (!(id in result)) {
+      result[id] = { status: row.status as "scheduled" | "completed", appointmentDate: row.appointment_date as string };
+    }
+  }
+  return result;
 }
 
 export interface CreatePuspakomBookingInput {

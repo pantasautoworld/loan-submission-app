@@ -7,7 +7,7 @@ import {
   refreshStockBoardVehicles,
   type StockBoardVehicle,
 } from "@/lib/stockBoard";
-import { PUSPAKOM_TYPES } from "@/lib/puspakomBookings";
+import type { PuspakomStatusInfo } from "@/lib/puspakomBookings";
 import { CarModal } from "./CarModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -29,8 +29,8 @@ interface Props {
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
   depositTotals: Record<string, number>;
-  /** Vehicle ids with at least one completed Puspakom booking - B5 and B7 are done together, so both tags show as a pair. */
-  puspakomCompletedIds: string[];
+  /** Each car's most recent Puspakom booking (B5 and B7 are done together, so one status per car), keyed by Stock Board vehicle id. */
+  puspakomStatusByVehicle: Record<string, PuspakomStatusInfo>;
 }
 
 function fmtMoney(n: string | number | undefined): string {
@@ -54,6 +54,18 @@ function fmtDateShort(isoDate: string | undefined): string {
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+/** Includes the year - used for Puspakom booking/expiry dates, which can run months out. */
+function fmtDateLong(isoDate: string): string {
+  const d = new Date(isoDate + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+/** Puspakom B5/B7 inspections are valid 120 days from the appointment date. */
+function puspakomExpiryIso(appointmentDateIso: string): string {
+  const d = new Date(appointmentDateIso + "T00:00:00");
+  d.setDate(d.getDate() + 120);
+  return d.toISOString().slice(0, 10);
+}
 function agingInfo(approvalDate: string): { text: string; level: "" | "warm" | "hot" } {
   const approved = new Date(approvalDate + "T00:00:00");
   const days = Math.max(0, Math.floor((Date.now() - approved.getTime()) / 86400000));
@@ -68,8 +80,7 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomCompletedIds }: Props) {
-  const puspakomCompleted = useMemo(() => new Set(puspakomCompletedIds), [puspakomCompletedIds]);
+export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomStatusByVehicle }: Props) {
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -305,13 +316,19 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                       <div className="inline-flex w-fit items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-3.5 py-1 font-mono text-base font-bold tracking-wide text-[#14171a]">
                         {v.vin}
                       </div>
-                      {puspakomCompleted.has(v.id) &&
-                        PUSPAKOM_TYPES.map((type) => (
-                          <span
-                            key={type}
-                            className="rounded-full border border-success px-2.5 py-0.5 text-[11px] font-semibold text-success"
-                          >
-                            ✅ {type}
+                      {puspakomStatusByVehicle[v.id] &&
+                        (puspakomStatusByVehicle[v.id].status === "completed" ? (
+                          <>
+                            <span className="rounded-full bg-success px-2.5 py-0.5 text-[11px] font-semibold text-[#0d0f12]">
+                              B5 B7 READY
+                            </span>
+                            <span className="rounded-full bg-success px-2.5 py-0.5 text-[11px] font-semibold text-[#0d0f12]">
+                              Expiry: {fmtDateLong(puspakomExpiryIso(puspakomStatusByVehicle[v.id].appointmentDate))}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="rounded-full bg-danger px-2.5 py-0.5 text-[11px] font-semibold text-[#0d0f12]">
+                            Booking: {fmtDateLong(puspakomStatusByVehicle[v.id].appointmentDate)}
                           </span>
                         ))}
                     </div>

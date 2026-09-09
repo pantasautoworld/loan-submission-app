@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { combineAttachments } from "@/lib/pdf/mergeDocuments";
+import { normalizePlate } from "@/lib/vocDocuments";
 import type { PersonRole, SignerRole, DocType, PersonFields } from "@/lib/types";
 
 export async function savePerson(submissionId: string, role: PersonRole, fields: PersonFields) {
@@ -131,6 +132,48 @@ export async function recordCombinedDocument(
   await supabase.storage.from("submission-files").remove(filePaths);
 
   revalidatePath(`/submissions/${submissionId}/edit`);
+}
+
+/**
+ * Looks up the VOC Library for this plate and, if found, copies it into this
+ * submission's own storage path and records it as the car_voc document - so
+ * staff no longer need to re-upload a VOC that was already added at /voc.
+ * Copies rather than pointing at the shared file directly, since removing a
+ * submission's document also deletes its storage file, which would otherwise
+ * destroy the shared master copy.
+ */
+export async function attachVocByPlate(
+  submissionId: string,
+  plate: string
+): Promise<{ attached: boolean }> {
+  const supabase = await createClient();
+  const noPlate = normalizePlate(plate);
+  if (!noPlate) return { attached: false };
+
+  const { data: voc } = await supabase
+    .from("voc_documents")
+    .select("file_path")
+    .eq("no_plate", noPlate)
+    .maybeSingle();
+  if (!voc) return { attached: false };
+
+  const ext = voc.file_path.split(".").pop() || "bin";
+  const destPath = `${submissionId}/car_voc-${Date.now()}.${ext}`;
+  const { error: copyError } = await supabase.storage
+    .from("submission-files")
+    .copy(voc.file_path, destPath);
+  if (copyError) throw new Error(copyError.message);
+
+  const { error } = await supabase
+    .from("documents")
+    .upsert(
+      { submission_id: submissionId, doc_type: "car_voc", file_path: destPath },
+      { onConflict: "submission_id,doc_type" }
+    );
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/submissions/${submissionId}/edit`);
+  return { attached: true };
 }
 
 export async function removeDocument(submissionId: string, docType: DocType) {

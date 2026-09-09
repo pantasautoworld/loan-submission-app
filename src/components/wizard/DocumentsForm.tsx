@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  attachVocByPlate,
   recordDocument,
   removeDocument,
   savePerson,
@@ -161,6 +162,18 @@ export function DocumentsForm({
     const plate = plateValue.trim().toUpperCase();
     await updateVehiclePartial(submissionId, { no_plate: plate });
     onVehicleExtracted({ no_plate: plate });
+
+    if (plate && !uploaded.has("car_voc")) {
+      try {
+        const result = await attachVocByPlate(submissionId, plate);
+        if (result.attached) {
+          setUploaded((s) => new Set(s).add("car_voc"));
+          setVocNotice(`VOC on file for ${plate} - attached automatically.`);
+        }
+      } catch {
+        // best-effort - manual upload still works if this lookup fails
+      }
+    }
   }
 
   async function applyStockBoardMatch() {
@@ -362,7 +375,9 @@ export function DocumentsForm({
       <div>
         <h3 className="font-medium text-fg">Attachments</h3>
         <p className="text-sm text-muted">
-          Uploading the Car VOC auto-fills No Plate (and Car Model/Finance Loan/Tenure if it
+          Type the No Plate below and, if that car&apos;s VOC was already uploaded to the VOC
+          Library, it attaches here automatically - no need to upload it again. Otherwise upload
+          the Car VOC directly and it auto-fills No Plate (and Car Model/Finance Loan/Tenure if it
           matches the Stock Board). An IC photo auto-fills that person&apos;s Name/NRIC; the TNB
           bill auto-fills the Hirer&apos;s Address.
         </p>
@@ -378,7 +393,7 @@ export function DocumentsForm({
       </label>
 
       <div className="rounded-[10px] border border-line bg-panel-raised/40 p-4 space-y-3">
-        {box("car_voc", "Car VOC", { required: true, hint: "auto-fills No Plate" })}
+        {box("car_voc", "Car VOC", { required: true, hint: "auto-attaches from the VOC Library once plate is typed below" })}
 
         <div className="border-t border-line pt-3">
           <label className={LABEL}>Detected No Plate</label>

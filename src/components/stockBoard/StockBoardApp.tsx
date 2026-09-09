@@ -88,6 +88,7 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
   const [statusFilter, setStatusFilter] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [depositFilter, setDepositFilter] = useState<"" | "no_booking" | "received">("");
+  const [puspakomFilter, setPuspakomFilter] = useState<"" | "pending" | "done">("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -153,6 +154,11 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
       } else if (depositFilter === "no_booking") {
         if ((depositTotals[v.id] ?? 0) > 0) return false; // already has at least one approved payment
       }
+      if (puspakomFilter === "pending") {
+        if (puspakomStatusByVehicle[v.id]) return false; // already has a booking (scheduled or done)
+      } else if (puspakomFilter === "done") {
+        if (!puspakomStatusByVehicle[v.id]) return false; // not booked yet
+      }
       if (!q) return true;
       return `${v.vehicle} ${v.vin}`.toLowerCase().includes(q);
     });
@@ -173,7 +179,17 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
         new Date(b.updatedAt || b.addedAt || 0).getTime() -
         new Date(a.updatedAt || a.addedAt || 0).getTime()
     );
-  }, [vehicles, search, statusFilter, staffFilter, depositFilter, depositTotals, sortBy]);
+  }, [
+    vehicles,
+    search,
+    statusFilter,
+    staffFilter,
+    depositFilter,
+    depositTotals,
+    puspakomFilter,
+    puspakomStatusByVehicle,
+    sortBy,
+  ]);
 
   async function handleDelete(v: StockBoardVehicle) {
     if (!confirm(`Delete "${v.vehicle}" from the Stock Board?`)) return;
@@ -269,6 +285,15 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
           <option value="">All deposits</option>
           <option value="no_booking">No booking</option>
           <option value="received">Booking paid</option>
+        </select>
+        <select
+          value={puspakomFilter}
+          onChange={(e) => setPuspakomFilter(e.target.value as "" | "pending" | "done")}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All Puspakom</option>
+          <option value="pending">Pending Booking</option>
+          <option value="done">Booking Done</option>
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}

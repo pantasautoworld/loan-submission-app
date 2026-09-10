@@ -13,15 +13,19 @@ const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-m
 
 interface Props {
   vehicles: StockBoardVehicle[];
+  /** Pre-fills the plate field, e.g. when opened from the "Without Booking" list for a specific car. */
+  initialPlate?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function AddPuspakomModal({ vehicles, onClose, onSaved }: Props) {
-  const [plate, setPlate] = useState("");
+export function AddPuspakomModal({ vehicles, initialPlate, onClose, onSaved }: Props) {
+  const [plate, setPlate] = useState(initialPlate ?? "");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [branch, setBranch] = useState("");
-  const [company, setCompany] = useState("");
+  const [company, setCompany] = useState(
+    () => vehicles.find((v) => v.vin === initialPlate)?.company ?? ""
+  );
   const [appointmentDate, setAppointmentDate] = useState(malaysiaTodayIso());
   const [appointmentTime, setAppointmentTime] = useState("");
   const [error, setError] = useState<string | null>(null);

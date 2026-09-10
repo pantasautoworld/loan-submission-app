@@ -41,6 +41,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
   const [viewYear, setViewYear] = useState(todayYear);
   const [viewMonth, setViewMonth] = useState(todayMonth);
   const [addingBooking, setAddingBooking] = useState(false);
+  const [quickAddPlate, setQuickAddPlate] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<PuspakomBookingRow | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingBooking, setEditingBooking] = useState<PuspakomBookingRow | null>(null);
@@ -58,6 +59,23 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
     }
     return map;
   }, [bookings]);
+
+  // Each car's latest booking (bookings is already ordered by appointment_date desc), so
+  // a car re-booked after its previous inspection expired shows its fresh booking, not the old one.
+  const bookingByVehicle = useMemo(() => {
+    const map = new Map<string, PuspakomBookingRow>();
+    for (const b of bookings) {
+      if (!map.has(b.stock_board_vehicle_id)) map.set(b.stock_board_vehicle_id, b);
+    }
+    return map;
+  }, [bookings]);
+  const withBooking = vehicles.filter((v) => bookingByVehicle.has(v.id));
+  const withoutBooking = vehicles.filter((v) => !bookingByVehicle.has(v.id));
+
+  function openQuickAdd(plate: string) {
+    setQuickAddPlate(plate);
+    setAddingBooking(true);
+  }
 
   function fmtTime(time: string | null): string {
     if (!time) return "";
@@ -141,7 +159,10 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
             <span className="h-2.5 w-2.5 rounded-full bg-success" /> Completed
           </span>
           <button
-            onClick={() => setAddingBooking(true)}
+            onClick={() => {
+              setQuickAddPlate(undefined);
+              setAddingBooking(true);
+            }}
             className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
           >
             + Add booking
@@ -194,6 +215,73 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
             );
           })
         )}
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-[10px] border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <p className="text-sm font-semibold text-fg">With Booking</p>
+            <span className="text-xs text-muted">{withBooking.length}</span>
+          </div>
+          <div className="max-h-[420px] divide-y divide-line overflow-y-auto">
+            {withBooking.length === 0 ? (
+              <p className="p-4 text-sm text-muted">No cars with a booking yet.</p>
+            ) : (
+              withBooking.map((v) => {
+                const b = bookingByVehicle.get(v.id)!;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelected(b)}
+                    className="flex w-full items-center justify-between gap-2 p-3 text-left hover:bg-panel-raised"
+                  >
+                    <div className="min-w-0">
+                      <div className="inline-flex items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-2 py-0.5 font-mono text-xs font-bold tracking-wide text-[#14171a]">
+                        {v.vin}
+                      </div>
+                      <div className="mt-1 truncate text-sm text-fg">{v.vehicle}</div>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                        b.status === "completed" ? "border-success text-success" : "border-danger text-danger"
+                      }`}
+                    >
+                      {b.status === "completed" ? "Completed" : "Not yet inspected"}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[10px] border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <p className="text-sm font-semibold text-fg">Without Booking</p>
+            <span className="text-xs text-muted">{withoutBooking.length}</span>
+          </div>
+          <div className="max-h-[420px] divide-y divide-line overflow-y-auto">
+            {withoutBooking.length === 0 ? (
+              <p className="p-4 text-sm text-muted">Every car has a booking.</p>
+            ) : (
+              withoutBooking.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => openQuickAdd(v.vin)}
+                  className="flex w-full items-center justify-between gap-2 p-3 text-left hover:bg-panel-raised"
+                >
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center rounded-md border-2 border-[#1a1d21] bg-[#f2f1ec] px-2 py-0.5 font-mono text-xs font-bold tracking-wide text-[#14171a]">
+                      {v.vin}
+                    </div>
+                    <div className="mt-1 truncate text-sm text-fg">{v.vehicle}</div>
+                  </div>
+                  <span className="flex-shrink-0 text-xs text-amber">+ Add booking</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       {selected && (
@@ -369,8 +457,15 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
       {addingBooking && (
         <AddPuspakomModal
           vehicles={vehicles}
-          onClose={() => setAddingBooking(false)}
-          onSaved={() => setAddingBooking(false)}
+          initialPlate={quickAddPlate}
+          onClose={() => {
+            setAddingBooking(false);
+            setQuickAddPlate(undefined);
+          }}
+          onSaved={() => {
+            setAddingBooking(false);
+            setQuickAddPlate(undefined);
+          }}
         />
       )}
 

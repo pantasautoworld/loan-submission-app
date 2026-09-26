@@ -20,6 +20,11 @@ export const RECON_LOCATIONS = [
   "Seng Mah Workshop",
   "J1 Gearbox Workshop",
   "Infinity",
+  "PANTAS - LG2",
+  "PANTAS - Serdang Raya",
+  "Carwash",
+  "KRS",
+  "Aircond Kajang",
 ] as const;
 export type ReconLocation = (typeof RECON_LOCATIONS)[number];
 

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import type { SigningBookingRow } from "@/lib/signingBookings";
-import { editSigningBooking, removeSigningBooking } from "@/app/signing/actions";
+import { assignSigningRunner, removeSigningBooking } from "@/app/signing/actions";
 import { malaysiaDateParts, malaysiaTodayIso } from "@/lib/timezone";
 import { AddSigningBookingModal } from "./AddSigningBookingModal";
 
@@ -76,22 +76,7 @@ export function SigningApp({ vehicles, bookings, runners }: Props) {
     setBusyId(booking.id);
     try {
       const runner = runners.find((r) => r.id === runnerId);
-      const formData = new FormData();
-      formData.set("buyerName", booking.buyer_name);
-      formData.set("financier", booking.financier);
-      formData.set("loanAmount", booking.loan_amount ? String(booking.loan_amount) : "");
-      formData.set("interestRate", booking.interest_rate ? String(booking.interest_rate) : "");
-      formData.set("tenureMonths", booking.tenure_months ? String(booking.tenure_months) : "");
-      formData.set(
-        "monthlyInstallment",
-        booking.monthly_installment ? String(booking.monthly_installment) : ""
-      );
-      formData.set("retentionAmount", String(booking.retention_amount));
-      formData.set("appointmentDate", booking.appointment_date);
-      formData.set("appointmentTime", booking.appointment_time ?? "");
-      formData.set("runnerId", runnerId);
-      formData.set("runnerName", runner?.full_name ?? "");
-      await editSigningBooking(booking.id, formData);
+      await assignSigningRunner(booking.id, runnerId, runner?.full_name ?? "");
       setSelected((s) => (s ? { ...s, runner_id: runnerId || null, runner_name: runner?.full_name ?? "" } : s));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not reassign - try again.");
@@ -224,11 +209,6 @@ export function SigningApp({ vehicles, bookings, runners }: Props) {
             <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs text-muted">
               <span>Financier: {selected.financier || "-"}</span>
               <span>Loan: {fmtMoney(selected.loan_amount)}</span>
-              <span>Rate: {selected.interest_rate ? `${selected.interest_rate}%` : "-"}</span>
-              <span>
-                Installment: {fmtMoney(selected.monthly_installment)}
-                {selected.tenure_months ? ` x ${selected.tenure_months}mth` : ""}
-              </span>
               <span>Retention: {fmtMoney(selected.retention_amount)}</span>
             </div>
 
@@ -285,7 +265,6 @@ export function SigningApp({ vehicles, bookings, runners }: Props) {
       {adding && (
         <AddSigningBookingModal
           vehicles={vehicles}
-          runners={runners}
           onClose={() => setAdding(false)}
           onSaved={() => setAdding(false)}
         />

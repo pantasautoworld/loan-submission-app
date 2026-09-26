@@ -9,20 +9,12 @@ export async function logSigningBooking(formData: FormData) {
   const stockBoardVehicleId = String(formData.get("stockBoardVehicleId") ?? "").trim();
   const noPlate = String(formData.get("noPlate") ?? "").trim();
   const vehicle = String(formData.get("vehicle") ?? "").trim();
-  const claimInvoiceId = String(formData.get("claimInvoiceId") ?? "").trim() || null;
   const buyerName = String(formData.get("buyerName") ?? "").trim();
   const financier = String(formData.get("financier") ?? "").trim();
   const loanAmount = formData.get("loanAmount") ? Number(formData.get("loanAmount")) : null;
-  const interestRate = formData.get("interestRate") ? Number(formData.get("interestRate")) : null;
-  const tenureMonths = formData.get("tenureMonths") ? Number(formData.get("tenureMonths")) : null;
-  const monthlyInstallment = formData.get("monthlyInstallment")
-    ? Number(formData.get("monthlyInstallment"))
-    : null;
   const retentionAmount = Number(formData.get("retentionAmount") ?? 0) || 0;
   const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
   const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
-  const runnerId = String(formData.get("runnerId") ?? "").trim() || null;
-  const runnerName = String(formData.get("runnerName") ?? "").trim();
 
   if (!stockBoardVehicleId || !noPlate) throw new Error("Pick a car.");
   if (!appointmentDate) throw new Error("Pick an appointment date.");
@@ -31,18 +23,12 @@ export async function logSigningBooking(formData: FormData) {
     stock_board_vehicle_id: stockBoardVehicleId,
     no_plate: noPlate,
     vehicle,
-    claim_invoice_id: claimInvoiceId,
     buyer_name: buyerName,
     financier,
     loan_amount: loanAmount,
-    interest_rate: interestRate,
-    tenure_months: tenureMonths,
-    monthly_installment: monthlyInstallment,
     retention_amount: retentionAmount,
     appointment_date: appointmentDate,
     appointment_time: appointmentTime || null,
-    runner_id: runnerId,
-    runner_name: runnerName,
     created_by_name: profile.full_name || "Staff",
   });
   if (error) throw new Error(error.message);
@@ -50,39 +36,12 @@ export async function logSigningBooking(formData: FormData) {
   revalidatePath("/recon");
 }
 
-export async function editSigningBooking(bookingId: string, formData: FormData) {
+/** Arranges which runner brings the car for this signing (or clears it with an empty runnerId). */
+export async function assignSigningRunner(bookingId: string, runnerId: string, runnerName: string) {
   const { supabase } = await requireSalesStaff();
-
-  const buyerName = String(formData.get("buyerName") ?? "").trim();
-  const financier = String(formData.get("financier") ?? "").trim();
-  const loanAmount = formData.get("loanAmount") ? Number(formData.get("loanAmount")) : null;
-  const interestRate = formData.get("interestRate") ? Number(formData.get("interestRate")) : null;
-  const tenureMonths = formData.get("tenureMonths") ? Number(formData.get("tenureMonths")) : null;
-  const monthlyInstallment = formData.get("monthlyInstallment")
-    ? Number(formData.get("monthlyInstallment"))
-    : null;
-  const retentionAmount = Number(formData.get("retentionAmount") ?? 0) || 0;
-  const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
-  const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
-  const runnerId = String(formData.get("runnerId") ?? "").trim() || null;
-  const runnerName = String(formData.get("runnerName") ?? "").trim();
-  if (!appointmentDate) throw new Error("Pick an appointment date.");
-
   const { error } = await supabase
     .from("signing_bookings")
-    .update({
-      buyer_name: buyerName,
-      financier,
-      loan_amount: loanAmount,
-      interest_rate: interestRate,
-      tenure_months: tenureMonths,
-      monthly_installment: monthlyInstallment,
-      retention_amount: retentionAmount,
-      appointment_date: appointmentDate,
-      appointment_time: appointmentTime || null,
-      runner_id: runnerId,
-      runner_name: runnerName,
-    })
+    .update({ runner_id: runnerId || null, runner_name: runnerId ? runnerName : "" })
     .eq("id", bookingId);
   if (error) throw new Error(error.message);
   revalidatePath("/signing");

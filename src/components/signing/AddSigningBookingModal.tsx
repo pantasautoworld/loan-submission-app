@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { logSigningBooking } from "@/app/signing/actions";
-import { findLatestClaimInvoiceByPlate } from "@/lib/signingBookings";
-import { createClient } from "@/lib/supabase/client";
+import { parseSigningNote } from "@/lib/signingNotes";
 import { malaysiaTodayIso } from "@/lib/timezone";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 
@@ -15,25 +14,19 @@ const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-m
 
 interface Props {
   vehicles: StockBoardVehicle[];
-  runners: { id: string; full_name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: Props) {
+export function AddSigningBookingModal({ vehicles, onClose, onSaved }: Props) {
   const [plate, setPlate] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [claimInvoiceId, setClaimInvoiceId] = useState<string | null>(null);
   const [buyerName, setBuyerName] = useState("");
   const [financier, setFinancier] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
-  const [interestRate, setInterestRate] = useState("");
-  const [tenureMonths, setTenureMonths] = useState("");
-  const [monthlyInstallment, setMonthlyInstallment] = useState("");
   const [retentionAmount, setRetentionAmount] = useState("0");
   const [appointmentDate, setAppointmentDate] = useState(malaysiaTodayIso());
   const [appointmentTime, setAppointmentTime] = useState("");
-  const [runnerId, setRunnerId] = useState("");
   const [autoFillNotice, setAutoFillNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -44,24 +37,19 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
     ? vehicles.filter((v) => v.vin.toLowerCase().includes(plateQuery))
     : vehicles;
 
-  async function handleSelectPlate(v: StockBoardVehicle) {
-    setPlate(v.vin);
-    setShowSuggestions(false);
-    try {
-      const supabase = createClient();
-      const match = await findLatestClaimInvoiceByPlate(supabase, v.vin);
-      if (match) {
-        setClaimInvoiceId(match.claimInvoiceId);
-        setBuyerName(match.buyerName);
-        setFinancier(match.financier);
-        setLoanAmount(match.loanAmount ? String(match.loanAmount) : "");
-        setAutoFillNotice("Auto-filled from that plate's claim invoice.");
-      } else {
-        setClaimInvoiceId(null);
-        setAutoFillNotice("No claim invoice found for this plate - fill in manually.");
-      }
-    } catch {
-      setAutoFillNotice(null);
+  /** Fills Buyer / Financier / Loan / Retention from the car's Stock Board note (the loan-approval message staff paste there). */
+  function applyVehicle(v: StockBoardVehicle) {
+    const parsed = parseSigningNote(v.notes, v.vin);
+    setBuyerName(parsed.buyerName);
+    setFinancier(parsed.financier);
+    setLoanAmount(parsed.loanAmount);
+    setRetentionAmount(parsed.retention || "0");
+    if (!v.notes?.trim()) {
+      setAutoFillNotice("This car has no note on the Stock Board - fill in manually.");
+    } else if (parsed.buyerName || parsed.loanAmount) {
+      setAutoFillNotice("Filled from the Stock Board note - check it before saving.");
+    } else {
+      setAutoFillNotice("Couldn't read the Stock Board note - fill in manually.");
     }
   }
 
@@ -81,19 +69,12 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
       formData.set("stockBoardVehicleId", matched.id);
       formData.set("noPlate", matched.vin);
       formData.set("vehicle", matched.vehicle);
-      if (claimInvoiceId) formData.set("claimInvoiceId", claimInvoiceId);
       formData.set("buyerName", buyerName);
       formData.set("financier", financier);
       formData.set("loanAmount", loanAmount);
-      formData.set("interestRate", interestRate);
-      formData.set("tenureMonths", tenureMonths);
-      formData.set("monthlyInstallment", monthlyInstallment);
       formData.set("retentionAmount", retentionAmount);
       formData.set("appointmentDate", appointmentDate);
       formData.set("appointmentTime", appointmentTime);
-      const runner = runners.find((r) => r.id === runnerId);
-      formData.set("runnerId", runnerId);
-      formData.set("runnerName", runner?.full_name ?? "");
       await logSigningBooking(formData);
       onSaved();
     } catch (err) {
@@ -115,6 +96,8 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
             onChange={(e) => {
               setPlate(e.target.value);
               setShowSuggestions(true);
+              const exact = vehicles.find((v) => v.vin.toLowerCase() === e.target.value.trim().toLowerCase());
+              if (exact) applyVehicle(exact);
             }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
@@ -128,7 +111,11 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
                   key={v.id}
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleSelectPlate(v)}
+                  onClick={() => {
+                    setPlate(v.vin);
+                    setShowSuggestions(false);
+                    applyVehicle(v);
+                  }}
                   className="block w-full px-2.5 py-1.5 text-left text-sm hover:bg-panel"
                 >
                   <span className="font-mono font-semibold text-fg">{v.vin}</span>
@@ -152,26 +139,13 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
             <input className={FIELD} value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} />
           </div>
           <div>
-            <label className={LABEL}>Interest Rate (%)</label>
-            <input className={FIELD} value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
-          </div>
-          <div>
-            <label className={LABEL}>Tenure (months)</label>
-            <input className={FIELD} value={tenureMonths} onChange={(e) => setTenureMonths(e.target.value)} />
-          </div>
-          <div>
-            <label className={LABEL}>Monthly Installment (RM)</label>
+            <label className={LABEL}>Retention (RM)</label>
             <input
               className={FIELD}
-              value={monthlyInstallment}
-              onChange={(e) => setMonthlyInstallment(e.target.value)}
+              value={retentionAmount}
+              onChange={(e) => setRetentionAmount(e.target.value)}
             />
           </div>
-        </div>
-        <label className={LABEL}>Retention (RM)</label>
-        <input className={FIELD} value={retentionAmount} onChange={(e) => setRetentionAmount(e.target.value)} />
-
-        <div className="grid grid-cols-2 gap-2.5">
           <div>
             <label className={LABEL}>Appointment date</label>
             <input
@@ -191,16 +165,6 @@ export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: 
             />
           </div>
         </div>
-
-        <label className={LABEL}>Runner (brings the car for inspection)</label>
-        <select className={FIELD} value={runnerId} onChange={(e) => setRunnerId(e.target.value)}>
-          <option value="">Unassigned</option>
-          {runners.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.full_name}
-            </option>
-          ))}
-        </select>
 
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}
 

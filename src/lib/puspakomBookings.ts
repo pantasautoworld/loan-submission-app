@@ -15,6 +15,8 @@ export interface PuspakomBookingRow {
   /** "HH:MM:SS" (Postgres time), or null if no specific time was given. */
   appointment_time: string | null;
   status: "scheduled" | "completed";
+  runner_id: string | null;
+  runner_name: string;
   created_by: string | null;
   created_by_name: string;
   completed_by_name: string | null;
@@ -72,6 +74,8 @@ export interface CreatePuspakomBookingInput {
   company: string;
   appointmentDate: string;
   appointmentTime: string;
+  runnerId: string | null;
+  runnerName: string;
   createdByProfileId: string | null;
   createdByName: string;
 }
@@ -88,6 +92,8 @@ export async function createPuspakomBooking(
     company: input.company,
     appointment_date: input.appointmentDate,
     appointment_time: input.appointmentTime || null,
+    runner_id: input.runnerId,
+    runner_name: input.runnerName,
     created_by: input.createdByProfileId,
     created_by_name: input.createdByName,
   });
@@ -99,6 +105,8 @@ export interface UpdatePuspakomBookingInput {
   company: string;
   appointmentDate: string;
   appointmentTime: string;
+  runnerId: string | null;
+  runnerName: string;
 }
 
 export async function updatePuspakomBooking(
@@ -113,21 +121,28 @@ export async function updatePuspakomBooking(
       company: input.company,
       appointment_date: input.appointmentDate,
       appointment_time: input.appointmentTime || null,
+      runner_id: input.runnerId,
+      runner_name: input.runnerName,
     })
     .eq("id", bookingId);
   if (error) throw new Error(error.message);
 }
 
+/** actorId is checked against the booking's runner_id unless isSalesStaff is true (admin/sales can complete any booking). */
 export async function markPuspakomBookingComplete(
   supabase: SupabaseClient,
   bookingId: string,
-  actorName: string
+  actorName: string,
+  actorId: string,
+  isSalesStaff: boolean
 ): Promise<void> {
-  const { error } = await supabase
+  let query = supabase
     .from("puspakom_bookings")
     .update({ status: "completed", completed_by_name: actorName, completed_at: new Date().toISOString() })
     .eq("id", bookingId)
     .eq("status", "scheduled");
+  if (!isSalesStaff) query = query.eq("runner_id", actorId);
+  const { error } = await query;
   if (error) throw new Error(error.message);
 }
 

@@ -1,11 +1,11 @@
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { fetchStockBoardVehicles } from "@/lib/stockBoard";
 import { fetchCarDeposits, getReceiptSignedUrl } from "@/lib/depositPayments";
 import { DepositPaymentApp } from "@/components/deposits/DepositPaymentApp";
 
 export default async function DepositsPage() {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
 
   const [allVehicles, deposits] = await Promise.all([
     fetchStockBoardVehicles(),

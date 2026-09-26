@@ -1,11 +1,11 @@
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { fetchStockBoardVehicles } from "@/lib/stockBoard";
 import { fetchVocDocuments } from "@/lib/vocDocuments";
 import { VocApp } from "@/components/voc/VocApp";
 
 export default async function VocPage() {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
 
   const [vehicles, documents] = await Promise.all([
     fetchStockBoardVehicles(),

@@ -1,10 +1,10 @@
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { fetchClaimInvoices } from "@/lib/claimInvoices";
 import { InvoiceApp } from "@/components/invoices/InvoiceApp";
 
 export default async function InvoicesPage() {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
   const invoices = await fetchClaimInvoices(supabase);
 
   return (

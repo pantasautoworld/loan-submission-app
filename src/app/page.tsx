@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { LeaderboardMonthPicker } from "@/components/LeaderboardMonthPicker";
 import { initialsOf, avatarColor } from "@/lib/avatar";
@@ -89,7 +89,7 @@ export default async function HomePage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
   const { month: monthParam } = await searchParams;
 
   // Computed in Malaysia time (not the server's own UTC) so "this month" matches
@@ -459,6 +459,80 @@ export default async function HomePage({
             <h2 className="font-medium text-fg">Vehicle Ownership Certificate</h2>
             <p className="mt-1 text-sm text-muted">
               Upload each car&apos;s VOC once - submissions attach it by plate.
+            </p>
+          </Link>
+          <Link
+            href="/recon"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-prep/15 transition-colors group-hover:bg-status-prep/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <path
+                  d="M9 22c1-4 4-7 8-7h10c4 0 7 3 8 7l3 1a3 3 0 0 1 2 3v5a2 2 0 0 1-2 2h-2"
+                  fill="none"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6 33v-4a3 3 0 0 1 3-3h30a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z"
+                  fill="#a66dd4"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <circle cx="14" cy="35" r="4.5" fill="#2c333c" stroke="#0f1115" strokeWidth="2.2" />
+                <circle cx="14" cy="35" r="1.6" fill="#eceef1" />
+                <circle cx="34" cy="35" r="4.5" fill="#2c333c" stroke="#0f1115" strokeWidth="2.2" />
+                <circle cx="34" cy="35" r="1.6" fill="#eceef1" />
+                <path
+                  d="M18 14l3 3 5-6"
+                  fill="none"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Car Condition &amp; Location</h2>
+            <p className="mt-1 text-sm text-muted">
+              Track recon tasks and runner assignments per car.
+            </p>
+          </Link>
+          <Link
+            href="/signing"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-reserved/15 transition-colors group-hover:bg-status-reserved/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <rect
+                  x="10"
+                  y="5"
+                  width="28"
+                  height="38"
+                  rx="3"
+                  fill="#F2F1EC"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <line x1="15" y1="13" x2="33" y2="13" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="15" y1="18" x2="33" y2="18" stroke="#0f1115" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="M16 30l6 6 12-14"
+                  fill="none"
+                  stroke="#4caf50"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Signing Booking</h2>
+            <p className="mt-1 text-sm text-muted">
+              Schedule signing appointments and assign a runner.
             </p>
           </Link>
         </div>

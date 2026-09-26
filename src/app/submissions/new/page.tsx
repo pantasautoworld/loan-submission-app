@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 
 export default async function NewSubmissionPage({
   searchParams,
 }: {
   searchParams: Promise<{ plate?: string }>;
 }) {
-  const { supabase, user } = await requireStaff();
+  const { supabase, user } = await requireSalesStaff();
   const { plate } = await searchParams;
 
   const { data, error } = await supabase

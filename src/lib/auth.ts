@@ -28,3 +28,10 @@ export async function requireAdmin() {
   if (result.profile.role !== "admin") redirect("/submissions");
   return result;
 }
+
+/** Same as requireStaff, but redirects runners to their own task board - use for admin/sales pages. */
+export async function requireSalesStaff() {
+  const result = await requireStaff();
+  if (result.profile.role === "runner") redirect("/recon");
+  return result;
+}

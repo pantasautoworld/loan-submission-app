@@ -10,15 +10,17 @@ const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-m
 
 interface Props {
   booking: PuspakomBookingRow;
+  runners: { id: string; full_name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function EditPuspakomModal({ booking, onClose, onSaved }: Props) {
+export function EditPuspakomModal({ booking, runners, onClose, onSaved }: Props) {
   const [branch, setBranch] = useState(booking.branch);
   const [company, setCompany] = useState(booking.company);
   const [appointmentDate, setAppointmentDate] = useState(booking.appointment_date);
   const [appointmentTime, setAppointmentTime] = useState(booking.appointment_time?.slice(0, 5) ?? "");
+  const [runnerId, setRunnerId] = useState(booking.runner_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -35,6 +37,9 @@ export function EditPuspakomModal({ booking, onClose, onSaved }: Props) {
       formData.set("company", company.trim());
       formData.set("appointmentDate", appointmentDate);
       formData.set("appointmentTime", appointmentTime);
+      const runner = runners.find((r) => r.id === runnerId);
+      formData.set("runnerId", runnerId);
+      formData.set("runnerName", runner?.full_name ?? "");
       await editPuspakomBooking(booking.id, formData);
       onSaved();
     } catch (err) {
@@ -91,6 +96,16 @@ export function EditPuspakomModal({ booking, onClose, onSaved }: Props) {
             />
           </div>
         </div>
+
+        <label className={LABEL}>Runner (brings the car for inspection)</label>
+        <select className={FIELD} value={runnerId} onChange={(e) => setRunnerId(e.target.value)}>
+          <option value="">Unassigned</option>
+          {runners.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.full_name}
+            </option>
+          ))}
+        </select>
 
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}
 

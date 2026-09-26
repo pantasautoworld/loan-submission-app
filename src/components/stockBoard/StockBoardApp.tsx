@@ -31,6 +31,10 @@ interface Props {
   depositTotals: Record<string, number>;
   /** Each car's most recent Puspakom booking (B5 and B7 are done together, so one status per car), keyed by Stock Board vehicle id. */
   puspakomStatusByVehicle: Record<string, PuspakomStatusInfo>;
+  /** Current recon Location per car, keyed by Stock Board vehicle id. */
+  locationByVehicle: Record<string, string>;
+  /** Count of pending recon tasks per car, keyed by Stock Board vehicle id. */
+  pendingTaskCounts: Record<string, number>;
 }
 
 function fmtMoney(n: string | number | undefined): string {
@@ -80,7 +84,15 @@ const AGING_CLASS: Record<string, string> = {
   "": "border-line text-muted",
 };
 
-export function StockBoardApp({ staffName, role, staffNames, depositTotals, puspakomStatusByVehicle }: Props) {
+export function StockBoardApp({
+  staffName,
+  role,
+  staffNames,
+  depositTotals,
+  puspakomStatusByVehicle,
+  locationByVehicle,
+  pendingTaskCounts,
+}: Props) {
   const [vehicles, setVehicles] = useState<StockBoardVehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +368,16 @@ export function StockBoardApp({ staffName, role, staffNames, depositTotals, pusp
                             Booking: {fmtDateLong(puspakomStatusByVehicle[v.id].appointmentDate)}
                           </span>
                         ))}
+                      {locationByVehicle[v.id] && (
+                        <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted">
+                          📍 {locationByVehicle[v.id]}
+                        </span>
+                      )}
+                      {(pendingTaskCounts[v.id] ?? 0) > 0 && (
+                        <span className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber">
+                          {pendingTaskCounts[v.id]} task{pendingTaskCounts[v.id] === 1 ? "" : "s"} pending
+                        </span>
+                      )}
                     </div>
                   )}
                   <div className="font-display mb-1 text-base font-semibold text-fg">{v.vehicle}</div>

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { logPuspakomBooking } from "@/app/puspakom/actions";
+import { logSigningBooking } from "@/app/signing/actions";
+import { findLatestClaimInvoiceByPlate } from "@/lib/signingBookings";
+import { createClient } from "@/lib/supabase/client";
 import { malaysiaTodayIso } from "@/lib/timezone";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 
@@ -14,39 +16,58 @@ const LABEL = "mb-1 block text-[11px] font-medium uppercase tracking-wide text-m
 interface Props {
   vehicles: StockBoardVehicle[];
   runners: { id: string; full_name: string }[];
-  /** Pre-fills the plate field, e.g. when opened from the "Without Booking" list for a specific car. */
-  initialPlate?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function AddPuspakomModal({ vehicles, runners, initialPlate, onClose, onSaved }: Props) {
-  const [plate, setPlate] = useState(initialPlate ?? "");
+export function AddSigningBookingModal({ vehicles, runners, onClose, onSaved }: Props) {
+  const [plate, setPlate] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [branch, setBranch] = useState("");
-  const [company, setCompany] = useState(
-    () => vehicles.find((v) => v.vin === initialPlate)?.company ?? ""
-  );
+  const [claimInvoiceId, setClaimInvoiceId] = useState<string | null>(null);
+  const [buyerName, setBuyerName] = useState("");
+  const [financier, setFinancier] = useState("");
+  const [loanAmount, setLoanAmount] = useState("");
+  const [interestRate, setInterestRate] = useState("");
+  const [tenureMonths, setTenureMonths] = useState("");
+  const [monthlyInstallment, setMonthlyInstallment] = useState("");
+  const [retentionAmount, setRetentionAmount] = useState("0");
   const [appointmentDate, setAppointmentDate] = useState(malaysiaTodayIso());
   const [appointmentTime, setAppointmentTime] = useState("");
   const [runnerId, setRunnerId] = useState("");
+  const [autoFillNotice, setAutoFillNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  function handleSelectPlate(v: StockBoardVehicle) {
-    setPlate(v.vin);
-    setShowSuggestions(false);
-    if (!company && v.company) setCompany(v.company);
-  }
-
+  const matched = vehicles.find((v) => v.vin.toLowerCase() === plate.trim().toLowerCase());
   const plateQuery = plate.trim().toLowerCase();
   const suggestions = plateQuery
     ? vehicles.filter((v) => v.vin.toLowerCase().includes(plateQuery))
     : vehicles;
 
+  async function handleSelectPlate(v: StockBoardVehicle) {
+    setPlate(v.vin);
+    setShowSuggestions(false);
+    try {
+      const supabase = createClient();
+      const match = await findLatestClaimInvoiceByPlate(supabase, v.vin);
+      if (match) {
+        setClaimInvoiceId(match.claimInvoiceId);
+        setBuyerName(match.buyerName);
+        setFinancier(match.financier);
+        setLoanAmount(match.loanAmount ? String(match.loanAmount) : "");
+        setAutoFillNotice("Auto-filled from that plate's claim invoice.");
+      } else {
+        setClaimInvoiceId(null);
+        setAutoFillNotice("No claim invoice found for this plate - fill in manually.");
+      }
+    } catch {
+      setAutoFillNotice(null);
+    }
+  }
+
   async function handleSave() {
-    if (!plate.trim()) {
-      setError("Enter a plate number.");
+    if (!matched) {
+      setError("Pick a car from the list.");
       return;
     }
     if (!appointmentDate) {
@@ -57,15 +78,23 @@ export function AddPuspakomModal({ vehicles, runners, initialPlate, onClose, onS
     setIsSaving(true);
     try {
       const formData = new FormData();
-      formData.set("plate", plate.trim());
-      formData.set("branch", branch.trim());
-      formData.set("company", company.trim());
+      formData.set("stockBoardVehicleId", matched.id);
+      formData.set("noPlate", matched.vin);
+      formData.set("vehicle", matched.vehicle);
+      if (claimInvoiceId) formData.set("claimInvoiceId", claimInvoiceId);
+      formData.set("buyerName", buyerName);
+      formData.set("financier", financier);
+      formData.set("loanAmount", loanAmount);
+      formData.set("interestRate", interestRate);
+      formData.set("tenureMonths", tenureMonths);
+      formData.set("monthlyInstallment", monthlyInstallment);
+      formData.set("retentionAmount", retentionAmount);
       formData.set("appointmentDate", appointmentDate);
       formData.set("appointmentTime", appointmentTime);
       const runner = runners.find((r) => r.id === runnerId);
       formData.set("runnerId", runnerId);
       formData.set("runnerName", runner?.full_name ?? "");
-      await logPuspakomBooking(formData);
+      await logSigningBooking(formData);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save - try again.");
@@ -75,8 +104,8 @@ export function AddPuspakomModal({ vehicles, runners, initialPlate, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-5">
-      <div className="w-full max-w-[420px] rounded-[10px] border border-line bg-panel p-6">
-        <h3 className="font-display mb-4 text-lg font-semibold text-fg">Add Puspakom booking</h3>
+      <div className="max-h-[90vh] w-full max-w-[440px] overflow-y-auto rounded-[10px] border border-line bg-panel p-6">
+        <h3 className="font-display mb-4 text-lg font-semibold text-fg">Add signing booking</h3>
 
         <label className={LABEL}>No Plate</label>
         <div className="relative mb-3">
@@ -109,22 +138,38 @@ export function AddPuspakomModal({ vehicles, runners, initialPlate, onClose, onS
             </div>
           )}
         </div>
+        {autoFillNotice && <p className="mb-3 text-xs text-muted">{autoFillNotice}</p>}
 
-        <label className={LABEL}>Company</label>
-        <input
-          className={FIELD}
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="e.g. ELK-DESA"
-        />
+        <label className={LABEL}>Buyer Name</label>
+        <input className={FIELD} value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
 
-        <label className={LABEL}>Puspakom branch</label>
-        <input
-          className={FIELD}
-          value={branch}
-          onChange={(e) => setBranch(e.target.value)}
-          placeholder="Optional"
-        />
+        <label className={LABEL}>Financier</label>
+        <input className={FIELD} value={financier} onChange={(e) => setFinancier(e.target.value)} />
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className={LABEL}>Loan Amount (RM)</label>
+            <input className={FIELD} value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} />
+          </div>
+          <div>
+            <label className={LABEL}>Interest Rate (%)</label>
+            <input className={FIELD} value={interestRate} onChange={(e) => setInterestRate(e.target.value)} />
+          </div>
+          <div>
+            <label className={LABEL}>Tenure (months)</label>
+            <input className={FIELD} value={tenureMonths} onChange={(e) => setTenureMonths(e.target.value)} />
+          </div>
+          <div>
+            <label className={LABEL}>Monthly Installment (RM)</label>
+            <input
+              className={FIELD}
+              value={monthlyInstallment}
+              onChange={(e) => setMonthlyInstallment(e.target.value)}
+            />
+          </div>
+        </div>
+        <label className={LABEL}>Retention (RM)</label>
+        <input className={FIELD} value={retentionAmount} onChange={(e) => setRetentionAmount(e.target.value)} />
 
         <div className="grid grid-cols-2 gap-2.5">
           <div>

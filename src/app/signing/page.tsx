@@ -1,24 +1,24 @@
 import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { fetchStockBoardVehicles } from "@/lib/stockBoard";
-import { fetchPuspakomBookings } from "@/lib/puspakomBookings";
+import { fetchSigningBookings } from "@/lib/signingBookings";
 import { fetchRunnerProfiles } from "@/lib/recon";
-import { PuspakomApp } from "@/components/puspakom/PuspakomApp";
+import { SigningApp } from "@/components/signing/SigningApp";
 
-export default async function PuspakomPage() {
+export default async function SigningPage() {
   const { profile, supabase } = await requireSalesStaff();
 
   const [allVehicles, bookings, runners] = await Promise.all([
     fetchStockBoardVehicles(),
-    fetchPuspakomBookings(supabase),
+    fetchSigningBookings(supabase),
     fetchRunnerProfiles(supabase),
   ]);
   const vehicles = allVehicles.filter((v) => v.status !== "sold");
 
   return (
     <>
-      <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Puspakom Booking"]} />
-      <PuspakomApp role={profile.role} vehicles={vehicles} bookings={bookings} runners={runners} />
+      <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Signing Booking"]} />
+      <SigningApp vehicles={vehicles} bookings={bookings} runners={runners} />
     </>
   );
 }

@@ -31,6 +31,19 @@ export async function uploadVocFile(plate: string, file: File): Promise<string> 
   return path;
 }
 
+export async function uploadSigningPhotoFile(bookingId: string, file: File): Promise<string> {
+  const supabase = createClient();
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `signing/${bookingId}/${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("submission-files")
+    .upload(path, file, { upsert: true, contentType: file.type });
+
+  if (error) throw new Error(error.message);
+  return path;
+}
+
 export function getSignedUrl(path: string) {
   const supabase = createClient();
   return supabase.storage.from("submission-files").createSignedUrl(path, 60 * 60);

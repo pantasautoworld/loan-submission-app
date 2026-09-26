@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { SubmissionWizard } from "@/components/wizard/SubmissionWizard";
 import type { PersonRow, SubmissionRow, DocumentRow } from "@/lib/types";
@@ -10,7 +10,7 @@ export default async function EditSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
 
   const [{ data: submission }, { data: persons }, { data: documents }] = await Promise.all([
     supabase.from("submissions").select("*").eq("id", id).single(),

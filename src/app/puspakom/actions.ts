@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin, requireStaff } from "@/lib/auth";
+import { requireAdmin, requireSalesStaff, requireStaff } from "@/lib/auth";
 import {
   createPuspakomBooking,
   deletePuspakomBooking,
@@ -11,13 +11,15 @@ import {
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
 export async function logPuspakomBooking(formData: FormData) {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
 
   const plate = String(formData.get("plate") ?? "").trim();
   const branch = String(formData.get("branch") ?? "").trim();
   const company = String(formData.get("company") ?? "").trim();
   const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
   const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
+  const runnerId = String(formData.get("runnerId") ?? "").trim() || null;
+  const runnerName = String(formData.get("runnerName") ?? "").trim();
   if (!plate) throw new Error("Enter a plate number.");
   if (!appointmentDate) throw new Error("Pick an appointment date.");
 
@@ -34,34 +36,54 @@ export async function logPuspakomBooking(formData: FormData) {
     company: company || vehicle.company || "",
     appointmentDate,
     appointmentTime,
+    runnerId,
+    runnerName,
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });
 
   revalidatePath("/puspakom");
   revalidatePath("/stock-board");
+  revalidatePath("/recon");
 }
 
 export async function editPuspakomBooking(bookingId: string, formData: FormData) {
-  const { supabase } = await requireStaff();
+  const { supabase } = await requireSalesStaff();
 
   const branch = String(formData.get("branch") ?? "").trim();
   const company = String(formData.get("company") ?? "").trim();
   const appointmentDate = String(formData.get("appointmentDate") ?? "").trim();
   const appointmentTime = String(formData.get("appointmentTime") ?? "").trim();
+  const runnerId = String(formData.get("runnerId") ?? "").trim() || null;
+  const runnerName = String(formData.get("runnerName") ?? "").trim();
   if (!appointmentDate) throw new Error("Pick an appointment date.");
 
-  await updatePuspakomBooking(supabase, bookingId, { branch, company, appointmentDate, appointmentTime });
+  await updatePuspakomBooking(supabase, bookingId, {
+    branch,
+    company,
+    appointmentDate,
+    appointmentTime,
+    runnerId,
+    runnerName,
+  });
 
   revalidatePath("/puspakom");
   revalidatePath("/stock-board");
+  revalidatePath("/recon");
 }
 
 export async function completePuspakomBooking(bookingId: string) {
   const { profile, supabase } = await requireStaff();
-  await markPuspakomBookingComplete(supabase, bookingId, profile.full_name || "Staff");
+  await markPuspakomBookingComplete(
+    supabase,
+    bookingId,
+    profile.full_name || "Staff",
+    profile.id,
+    profile.role !== "runner"
+  );
   revalidatePath("/puspakom");
   revalidatePath("/stock-board");
+  revalidatePath("/recon");
 }
 
 export async function removePuspakomBooking(bookingId: string) {

@@ -52,31 +52,45 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
       </div>
 
       <div className="flex items-center gap-5 border-t border-line px-6 py-2 text-xs font-medium text-muted">
-        <Link href="/submissions" className="hover:text-amber">
-          Submissions
-        </Link>
-        <Link href="/submissions/new" className="hover:text-amber">
-          New Submission
-        </Link>
-        <Link href="/stock-board" className="hover:text-amber">
-          Stock Board
-        </Link>
-        <Link href="/deposits" className="hover:text-amber">
-          Deposit Payment
-        </Link>
-        <Link href="/puspakom" className="hover:text-amber">
-          Puspakom Booking
-        </Link>
-        <Link href="/voc" className="hover:text-amber">
-          VOC
-        </Link>
-        <Link href="/invoices" className="hover:text-amber">
-          Claim Invoices
-        </Link>
-        {role === "admin" && (
-          <Link href="/staff" className="hover:text-amber">
-            Manage Staff
+        {role === "runner" ? (
+          <Link href="/recon" className="hover:text-amber">
+            My Tasks
           </Link>
+        ) : (
+          <>
+            <Link href="/submissions" className="hover:text-amber">
+              Submissions
+            </Link>
+            <Link href="/submissions/new" className="hover:text-amber">
+              New Submission
+            </Link>
+            <Link href="/stock-board" className="hover:text-amber">
+              Stock Board
+            </Link>
+            <Link href="/deposits" className="hover:text-amber">
+              Deposit Payment
+            </Link>
+            <Link href="/puspakom" className="hover:text-amber">
+              Puspakom Booking
+            </Link>
+            <Link href="/signing" className="hover:text-amber">
+              Signing Booking
+            </Link>
+            <Link href="/recon" className="hover:text-amber">
+              Car Condition
+            </Link>
+            <Link href="/voc" className="hover:text-amber">
+              VOC
+            </Link>
+            <Link href="/invoices" className="hover:text-amber">
+              Claim Invoices
+            </Link>
+            {role === "admin" && (
+              <Link href="/staff" className="hover:text-amber">
+                Manage Staff
+              </Link>
+            )}
+          </>
         )}
       </div>
     </header>

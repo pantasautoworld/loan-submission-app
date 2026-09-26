@@ -13,6 +13,7 @@ interface Props {
   /** Every non-sold Stock Board car - passed through to the "+ Add booking" plate picker. */
   vehicles: StockBoardVehicle[];
   bookings: PuspakomBookingRow[];
+  runners: { id: string; full_name: string }[];
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -34,7 +35,7 @@ function getMonthGrid(year: number, month: number): (string | null)[][] {
   return weeks;
 }
 
-export function PuspakomApp({ role, vehicles, bookings }: Props) {
+export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
   const { year: todayYear, month: todayMonth } = malaysiaDateParts();
   const todayIso = malaysiaTodayIso();
 
@@ -314,6 +315,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
                 ? ` · Completed by ${selected.completed_by_name}`
                 : ""}
             </div>
+            <div className="mt-1 text-xs text-muted">Runner: {selected.runner_name || "unassigned"}</div>
             <span
               className={`mt-3 inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
                 selected.status === "completed" ? "border-success text-success" : "border-danger text-danger"
@@ -457,6 +459,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
       {addingBooking && (
         <AddPuspakomModal
           vehicles={vehicles}
+          runners={runners}
           initialPlate={quickAddPlate}
           onClose={() => {
             setAddingBooking(false);
@@ -472,6 +475,7 @@ export function PuspakomApp({ role, vehicles, bookings }: Props) {
       {editingBooking && (
         <EditPuspakomModal
           booking={editingBooking}
+          runners={runners}
           onClose={() => setEditingBooking(null)}
           onSaved={() => setEditingBooking(null)}
         />

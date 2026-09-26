@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireStaff } from "@/lib/auth";
+import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { DownloadLink } from "@/components/DownloadLink";
 import { DeleteSubmissionButton } from "@/components/DeleteSubmissionButton";
@@ -29,7 +29,7 @@ export default async function SubmissionsPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { profile, supabase } = await requireStaff();
+  const { profile, supabase } = await requireSalesStaff();
   const { month: monthParam } = await searchParams;
 
   // Computed in Malaysia time (not the server's own UTC) so "this month" matches

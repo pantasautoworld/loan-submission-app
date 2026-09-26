@@ -16,7 +16,7 @@ interface StaffRow {
   id: string;
   full_name: string;
   username: string | null;
-  role: "admin" | "sales" | string;
+  role: "admin" | "sales" | "runner" | string;
   photoUrl: string | null;
   is_active: boolean;
 }
@@ -71,7 +71,7 @@ function AddStaffForm() {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "sales">("sales");
+  const [role, setRole] = useState<"admin" | "sales" | "runner">("sales");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,10 +170,11 @@ function AddStaffForm() {
           <select
             className={FIELD}
             value={role}
-            onChange={(e) => setRole(e.target.value as "admin" | "sales")}
+            onChange={(e) => setRole(e.target.value as "admin" | "sales" | "runner")}
           >
             <option value="sales">Sales</option>
             <option value="admin">Admin</option>
+            <option value="runner">Runner</option>
           </select>
         </div>
       </div>
@@ -222,7 +223,7 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
     });
   }
 
-  function handleRoleChange(role: "admin" | "sales") {
+  function handleRoleChange(role: "admin" | "sales" | "runner") {
     setError(null);
     startTransition(async () => {
       try {
@@ -282,10 +283,11 @@ function StaffRowCard({ staff, isSelf }: { staff: StaffRow; isSelf: boolean }) {
             className="rounded-[7px] border border-line bg-panel-raised px-2 py-1 text-xs text-fg"
             value={staff.role}
             disabled={isPending || isSelf}
-            onChange={(e) => handleRoleChange(e.target.value as "admin" | "sales")}
+            onChange={(e) => handleRoleChange(e.target.value as "admin" | "sales" | "runner")}
           >
             <option value="sales">Sales</option>
             <option value="admin">Admin</option>
+            <option value="runner">Runner</option>
           </select>
           <label className="cursor-pointer text-xs text-amber hover:underline">
             {staff.photoUrl ? "Change photo" : "Add photo"}

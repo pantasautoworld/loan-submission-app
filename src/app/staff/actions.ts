@@ -14,7 +14,7 @@ export async function createStaff(fields: {
   full_name: string;
   username: string;
   password: string;
-  role: "admin" | "sales";
+  role: "admin" | "sales" | "runner";
   avatar_path?: string;
 }) {
   await requireAdmin();
@@ -81,7 +81,7 @@ export async function updateStaffPhoto(profileId: string, avatarPath: string) {
   revalidatePath("/");
 }
 
-export async function updateStaffRole(profileId: string, role: "admin" | "sales") {
+export async function updateStaffRole(profileId: string, role: "admin" | "sales" | "runner") {
   const { profile, supabase } = await requireAdmin();
   if (profileId === profile.id && role !== "admin") {
     throw new Error("You can't remove your own admin access.");

@@ -4,6 +4,7 @@ import { fetchStockBoardVehicles } from "@/lib/stockBoard";
 import {
   fetchCarLocations,
   fetchConditionItems,
+  fetchConditionMedia,
   fetchReconTasks,
   fetchReconTasksForRunner,
   fetchRunnerProfiles,
@@ -18,9 +19,10 @@ export default async function ReconPage() {
   const { profile, supabase } = await requireStaff();
 
   if (profile.role === "runner") {
-    const [allVehicles, checklistItems, reconTasks, signingBookings, allPuspakom, timeLogs] = await Promise.all([
+    const [allVehicles, checklistItems, checklistMedia, reconTasks, signingBookings, allPuspakom, timeLogs] = await Promise.all([
       fetchStockBoardVehicles(),
       fetchConditionItems(supabase),
+      fetchConditionMedia(supabase),
       fetchReconTasksForRunner(supabase, profile.id),
       fetchSigningBookingsForRunner(supabase, profile.id),
       fetchPuspakomBookings(supabase),
@@ -35,6 +37,7 @@ export default async function ReconPage() {
         <RunnerTaskBoard
           vehicles={vehicles}
           checklistItems={checklistItems}
+          checklistMedia={checklistMedia}
           reconTasks={reconTasks}
           signingBookings={signingBookings}
           puspakomBookings={puspakomBookings}
@@ -44,11 +47,12 @@ export default async function ReconPage() {
     );
   }
 
-  const [allVehicles, carLocations, reconTasks, timeLogs, signingBookings, puspakomBookings, runners] =
+  const [allVehicles, carLocations, reconTasks, conditionMedia, timeLogs, signingBookings, puspakomBookings, runners] =
     await Promise.all([
       fetchStockBoardVehicles(),
       fetchCarLocations(supabase),
       fetchReconTasks(supabase),
+      fetchConditionMedia(supabase),
       fetchRunnerTimeLogs(supabase),
       fetchSigningBookings(supabase),
       fetchPuspakomBookings(supabase),
@@ -63,6 +67,7 @@ export default async function ReconPage() {
         vehicles={vehicles}
         carLocations={carLocations}
         reconTasks={reconTasks}
+        conditionMedia={conditionMedia}
         timeLogs={timeLogs}
         signingBookings={signingBookings}
         puspakomBookings={puspakomBookings}

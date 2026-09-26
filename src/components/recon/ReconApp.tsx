@@ -18,6 +18,7 @@ import {
   CONDITION_TYPES,
   RECON_LOCATIONS,
   type CarLocationRow,
+  type ReconMediaRow,
   type ReconTaskRow,
   type RunnerTimeLogRow,
 } from "@/lib/recon";
@@ -31,6 +32,7 @@ interface Props {
   vehicles: StockBoardVehicle[];
   carLocations: CarLocationRow[];
   reconTasks: ReconTaskRow[];
+  conditionMedia: ReconMediaRow[];
   timeLogs: RunnerTimeLogRow[];
   signingBookings: SigningBookingRow[];
   puspakomBookings: PuspakomBookingRow[];
@@ -49,6 +51,7 @@ export function ReconApp({
   vehicles,
   carLocations,
   reconTasks,
+  conditionMedia,
   timeLogs,
   signingBookings,
   puspakomBookings,
@@ -316,6 +319,7 @@ export function ReconApp({
         <CarChecklistModal
           vehicles={vehicles}
           items={conditionItems}
+          media={conditionMedia}
           initialVehicleId={checklistVehicleId}
           onClose={() => setChecklistVehicleId(null)}
         />

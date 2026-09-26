@@ -67,6 +67,26 @@ export interface RunnerTimeLogRow {
   created_at: string;
 }
 
+/** A photo or video a runner attached to a checklist item as evidence when something's wrong. */
+export interface ReconMediaRow {
+  id: string;
+  recon_task_id: string;
+  file_path: string;
+  media_type: "photo" | "video";
+  uploaded_by: string | null;
+  uploaded_by_name: string;
+  created_at: string;
+}
+
+export async function fetchConditionMedia(supabase: SupabaseClient): Promise<ReconMediaRow[]> {
+  const { data, error } = await supabase
+    .from("recon_task_media")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ReconMediaRow[];
+}
+
 export async function fetchCarLocations(supabase: SupabaseClient): Promise<CarLocationRow[]> {
   const { data, error } = await supabase.from("car_locations").select("*");
   if (error) throw new Error(error.message);

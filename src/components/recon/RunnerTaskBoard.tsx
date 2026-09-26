@@ -27,7 +27,7 @@ import { completePuspakomBooking } from "@/app/puspakom/actions";
 import { uploadSigningPhotoFile } from "@/lib/storage";
 import { AddReconTaskModal } from "./AddReconTaskModal";
 import { CarChecklistModal } from "./CarChecklistModal";
-import type { ReconTaskRow, RunnerTimeLogRow } from "@/lib/recon";
+import type { ReconMediaRow, ReconTaskRow, RunnerTimeLogRow } from "@/lib/recon";
 import type { SigningBookingRow } from "@/lib/signingBookings";
 import type { PuspakomBookingRow } from "@/lib/puspakomBookings";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
@@ -36,6 +36,8 @@ interface Props {
   vehicles: StockBoardVehicle[];
   /** Every car's condition-checklist rows (any runner) - what the "Check a car" checklist reads. */
   checklistItems: ReconTaskRow[];
+  /** Photos/videos attached to checklist items. */
+  checklistMedia: ReconMediaRow[];
   reconTasks: ReconTaskRow[];
   signingBookings: SigningBookingRow[];
   puspakomBookings: PuspakomBookingRow[];
@@ -60,6 +62,7 @@ function fmtTime(iso: string | null): string {
 export function RunnerTaskBoard({
   vehicles,
   checklistItems,
+  checklistMedia,
   reconTasks,
   signingBookings,
   puspakomBookings,
@@ -394,7 +397,11 @@ export function RunnerTaskBoard({
         <AddReconTaskModal vehicles={vehicles} onClose={() => setShowAdd(false)} onSaved={() => setShowAdd(false)} />
       )}
       {showChecklist && (
-        <CarChecklistModal vehicles={vehicles} items={checklistItems} onClose={() => setShowChecklist(false)} />
+        <CarChecklistModal
+          vehicles={vehicles}
+          items={checklistItems}
+          media={checklistMedia}
+          onClose={() => setShowChecklist(false)} />
       )}
     </div>
   );

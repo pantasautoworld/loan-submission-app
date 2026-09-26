@@ -153,6 +153,89 @@ export async function setConditionItem(
   revalidatePath("/stock-board");
 }
 
+/**
+ * Records a photo/video (already uploaded to storage by the browser) against one checklist item.
+ * If that item isn't on the car's checklist yet it's created as Pending - a runner attaching
+ * evidence means something's wrong - and, for a runner, picked up by them if nobody owns it.
+ */
+export async function addConditionMedia(
+  stockBoardVehicleId: string,
+  noPlate: string,
+  vehicle: string,
+  conditionType: string,
+  filePath: string,
+  mediaType: "photo" | "video"
+) {
+  const { profile, supabase } = await requireStaff();
+  if (!stockBoardVehicleId || !conditionType || !filePath) throw new Error("Missing car, item or file.");
+  const actor = profile.full_name || "Staff";
+  const isRunner = profile.role === "runner";
+
+  const { data: existing, error: findErr } = await supabase
+    .from("recon_tasks")
+    .select("id, runner_id, status")
+    .eq("stock_board_vehicle_id", stockBoardVehicleId)
+    .eq("task_kind", "condition")
+    .eq("condition_type", conditionType)
+    .maybeSingle();
+  if (findErr) throw new Error(findErr.message);
+
+  let taskId: string;
+  if (existing) {
+    taskId = existing.id;
+    if (isRunner && existing.status === "pending" && !existing.runner_id) {
+      await supabase.from("recon_tasks").update({ runner_id: profile.id, runner_name: actor }).eq("id", taskId);
+    }
+  } else {
+    const { data: created, error: createErr } = await supabase
+      .from("recon_tasks")
+      .insert({
+        stock_board_vehicle_id: stockBoardVehicleId,
+        no_plate: noPlate,
+        vehicle,
+        task_kind: "condition",
+        condition_type: conditionType,
+        status: "pending",
+        runner_id: isRunner ? profile.id : null,
+        runner_name: isRunner ? actor : "",
+        created_by_name: actor,
+      })
+      .select("id")
+      .single();
+    if (createErr || !created) throw new Error(createErr?.message ?? "Could not create the checklist item.");
+    taskId = created.id;
+  }
+
+  const { error } = await supabase.from("recon_task_media").insert({
+    recon_task_id: taskId,
+    file_path: filePath,
+    media_type: mediaType,
+    uploaded_by: profile.id,
+    uploaded_by_name: actor,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/recon");
+  revalidatePath("/stock-board");
+}
+
+/** A runner can remove only what they uploaded themselves; admin/sales can remove any. */
+export async function removeConditionMedia(mediaId: string) {
+  const { profile, supabase } = await requireStaff();
+  const { data: media } = await supabase
+    .from("recon_task_media")
+    .select("file_path, uploaded_by")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (!media) return;
+  if (profile.role === "runner" && media.uploaded_by !== profile.id) {
+    throw new Error("You can only remove your own uploads.");
+  }
+  const { error } = await supabase.from("recon_task_media").delete().eq("id", mediaId);
+  if (error) throw new Error(error.message);
+  await supabase.storage.from("submission-files").remove([media.file_path]);
+  revalidatePath("/recon");
+}
+
 async function assertOwnsTask(
   supabase: Awaited<ReturnType<typeof createClient>>,
   taskId: string,
@@ -226,8 +309,13 @@ export async function reassignReconTask(
 
 export async function deleteReconTask(taskId: string) {
   const { supabase } = await requireSalesStaff();
+  // the media rows cascade away with the task, but their files in storage don't - clear those first
+  const { data: media } = await supabase.from("recon_task_media").select("file_path").eq("recon_task_id", taskId);
   const { error } = await supabase.from("recon_tasks").delete().eq("id", taskId);
   if (error) throw new Error(error.message);
+  if (media && media.length > 0) {
+    await supabase.storage.from("submission-files").remove(media.map((m) => m.file_path));
+  }
   revalidatePath("/recon");
   revalidatePath("/stock-board");
 }

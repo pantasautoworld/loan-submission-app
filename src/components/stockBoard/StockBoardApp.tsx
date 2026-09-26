@@ -8,6 +8,7 @@ import {
   type StockBoardVehicle,
 } from "@/lib/stockBoard";
 import type { PuspakomStatusInfo } from "@/lib/puspakomBookings";
+import { RECON_LOCATIONS } from "@/lib/recon";
 import { CarModal } from "./CarModal";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -101,6 +102,8 @@ export function StockBoardApp({
   const [staffFilter, setStaffFilter] = useState("");
   const [depositFilter, setDepositFilter] = useState<"" | "no_booking" | "received">("");
   const [puspakomFilter, setPuspakomFilter] = useState<"" | "pending" | "done">("");
+  // "" = all cars, "__none" = cars with no location set, otherwise one location name
+  const [locationFilter, setLocationFilter] = useState<string>("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -171,6 +174,11 @@ export function StockBoardApp({
       } else if (puspakomFilter === "done") {
         if (!puspakomStatusByVehicle[v.id]) return false; // not booked yet
       }
+      if (locationFilter === "__none") {
+        if (locationByVehicle[v.id]) return false;
+      } else if (locationFilter) {
+        if (locationByVehicle[v.id] !== locationFilter) return false;
+      }
       if (!q) return true;
       return `${v.vehicle} ${v.vin}`.toLowerCase().includes(q);
     });
@@ -200,6 +208,8 @@ export function StockBoardApp({
     depositTotals,
     puspakomFilter,
     puspakomStatusByVehicle,
+    locationFilter,
+    locationByVehicle,
     sortBy,
   ]);
 
@@ -306,6 +316,19 @@ export function StockBoardApp({
           <option value="">All Puspakom</option>
           <option value="pending">Pending Booking</option>
           <option value="done">Booking Done</option>
+        </select>
+        <select
+          value={locationFilter}
+          onChange={(e) => setLocationFilter(e.target.value)}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All locations</option>
+          {RECON_LOCATIONS.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+          <option value="__none">No location set</option>
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}

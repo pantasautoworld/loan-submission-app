@@ -14,11 +14,18 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { setCarLocation, reassignReconTask, deleteReconTask, updateReconTaskStatus } from "@/app/recon/actions";
-import { RECON_LOCATIONS, type CarLocationRow, type ReconTaskRow, type RunnerTimeLogRow } from "@/lib/recon";
+import {
+  CONDITION_TYPES,
+  RECON_LOCATIONS,
+  type CarLocationRow,
+  type ReconTaskRow,
+  type RunnerTimeLogRow,
+} from "@/lib/recon";
 import type { SigningBookingRow } from "@/lib/signingBookings";
 import type { PuspakomBookingRow } from "@/lib/puspakomBookings";
 import type { StockBoardVehicle } from "@/lib/stockBoard";
 import { AddReconTaskModal } from "./AddReconTaskModal";
+import { CarChecklistModal } from "./CarChecklistModal";
 
 interface Props {
   vehicles: StockBoardVehicle[];
@@ -49,7 +56,15 @@ export function ReconApp({
 }: Props) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [checklistVehicleId, setChecklistVehicleId] = useState<string | null>(null);
   const [tasks, setTasks] = useState(reconTasks);
+  // Re-sync when fresh server data arrives (e.g. a checklist item marked Pending elsewhere) - adjusting
+  // state during render instead of in an effect avoids an extra stale paint.
+  const [syncedFrom, setSyncedFrom] = useState(reconTasks);
+  if (syncedFrom !== reconTasks) {
+    setSyncedFrom(reconTasks);
+    setTasks(reconTasks);
+  }
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busyLocationId, setBusyLocationId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -59,6 +74,21 @@ export function ReconApp({
     for (const l of carLocations) map.set(l.stock_board_vehicle_id, l);
     return map;
   }, [carLocations]);
+
+  const conditionItems = useMemo(() => reconTasks.filter((t) => t.task_kind === "condition"), [reconTasks]);
+
+  /** "3/10" style progress per car (done items over the checklist length), shown on the Checklist button. */
+  const checklistSummary = useMemo(() => {
+    const done = new Map<string, number>();
+    for (const t of conditionItems) {
+      if (t.status === "done") done.set(t.stock_board_vehicle_id, (done.get(t.stock_board_vehicle_id) ?? 0) + 1);
+    }
+    const summary = new Map<string, string>();
+    for (const t of conditionItems) {
+      summary.set(t.stock_board_vehicle_id, `${done.get(t.stock_board_vehicle_id) ?? 0}/${CONDITION_TYPES.length}`);
+    }
+    return summary;
+  }, [conditionItems]);
 
   const q = search.trim().toLowerCase();
   const filteredVehicles = q ? vehicles.filter((v) => v.vin.toLowerCase().includes(q)) : vehicles;
@@ -192,19 +222,28 @@ export function ReconApp({
                 </div>
                 <span className="text-sm text-fg">{v.vehicle}</span>
               </div>
-              <select
-                value={loc?.location ?? ""}
-                disabled={busyLocationId === v.id}
-                onChange={(e) => handleLocationChange(v, e.target.value)}
-                className="rounded-[7px] border border-line bg-panel-raised px-2 py-1 text-xs text-fg outline-none focus:border-amber disabled:opacity-50"
-              >
-                <option value="">No location set</option>
-                {RECON_LOCATIONS.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setChecklistVehicleId(v.id)}
+                  className="rounded-[7px] border border-line bg-panel-raised px-2.5 py-1 text-xs text-fg hover:border-amber"
+                >
+                  Checklist
+                  {checklistSummary.get(v.id) ? ` (${checklistSummary.get(v.id)})` : ""}
+                </button>
+                <select
+                  value={loc?.location ?? ""}
+                  disabled={busyLocationId === v.id}
+                  onChange={(e) => handleLocationChange(v, e.target.value)}
+                  className="rounded-[7px] border border-line bg-panel-raised px-2 py-1 text-xs text-fg outline-none focus:border-amber disabled:opacity-50"
+                >
+                  <option value="">No location set</option>
+                  {RECON_LOCATIONS.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           );
         })}
@@ -271,6 +310,14 @@ export function ReconApp({
           runners={runners}
           onClose={() => setShowAdd(false)}
           onSaved={() => setShowAdd(false)}
+        />
+      )}
+      {checklistVehicleId && (
+        <CarChecklistModal
+          vehicles={vehicles}
+          items={conditionItems}
+          initialVehicleId={checklistVehicleId}
+          onClose={() => setChecklistVehicleId(null)}
         />
       )}
     </div>

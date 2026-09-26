@@ -26,6 +26,7 @@ import { markSigningBookingComplete, saveSigningPhoto } from "@/app/signing/acti
 import { completePuspakomBooking } from "@/app/puspakom/actions";
 import { uploadSigningPhotoFile } from "@/lib/storage";
 import { AddReconTaskModal } from "./AddReconTaskModal";
+import { CarChecklistModal } from "./CarChecklistModal";
 import type { ReconTaskRow, RunnerTimeLogRow } from "@/lib/recon";
 import type { SigningBookingRow } from "@/lib/signingBookings";
 import type { PuspakomBookingRow } from "@/lib/puspakomBookings";
@@ -33,6 +34,8 @@ import type { StockBoardVehicle } from "@/lib/stockBoard";
 
 interface Props {
   vehicles: StockBoardVehicle[];
+  /** Every car's condition-checklist rows (any runner) - what the "Check a car" checklist reads. */
+  checklistItems: ReconTaskRow[];
   reconTasks: ReconTaskRow[];
   signingBookings: SigningBookingRow[];
   puspakomBookings: PuspakomBookingRow[];
@@ -54,9 +57,17 @@ function fmtTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-export function RunnerTaskBoard({ vehicles, reconTasks, signingBookings, puspakomBookings, timeLogs }: Props) {
+export function RunnerTaskBoard({
+  vehicles,
+  checklistItems,
+  reconTasks,
+  signingBookings,
+  puspakomBookings,
+  timeLogs,
+}: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
   const [remarkDrafts, setRemarkDrafts] = useState<Record<string, string>>({});
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -298,12 +309,20 @@ export function RunnerTaskBoard({ vehicles, reconTasks, signingBookings, puspako
 
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">Flexible Tasks</h3>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="rounded-[7px] border border-line bg-panel-raised px-3 py-1 text-xs text-fg hover:border-amber"
-        >
-          + Add task
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowChecklist(true)}
+            className="rounded-[7px] bg-amber px-3 py-1 text-xs font-semibold text-amber-fg hover:brightness-110"
+          >
+            Check a car
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="rounded-[7px] border border-line bg-panel-raised px-3 py-1 text-xs text-fg hover:border-amber"
+          >
+            + Add task
+          </button>
+        </div>
       </div>
       {allDisplayTasks.length === 0 ? (
         <p className="mb-6 text-sm text-muted">Nothing pending - nice.</p>
@@ -373,6 +392,9 @@ export function RunnerTaskBoard({ vehicles, reconTasks, signingBookings, puspako
 
       {showAdd && (
         <AddReconTaskModal vehicles={vehicles} onClose={() => setShowAdd(false)} onSaved={() => setShowAdd(false)} />
+      )}
+      {showChecklist && (
+        <CarChecklistModal vehicles={vehicles} items={checklistItems} onClose={() => setShowChecklist(false)} />
       )}
     </div>
   );

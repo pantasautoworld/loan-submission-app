@@ -70,7 +70,85 @@ export async function createReconTask(formData: FormData) {
     due_date: dueDate,
     created_by_name: profile.full_name || "Staff",
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("That condition is already on this car's checklist - update it there instead.");
+    }
+    throw new Error(error.message);
+  }
+  revalidatePath("/recon");
+  revalidatePath("/stock-board");
+}
+
+/**
+ * Checklist entry point: marks one condition item on one car Pending or Done (with a remark).
+ * The checklist is per car, shared by everyone - a Pending item is just a pending condition
+ * task, so it lands on a runner's drag-and-drop list automatically. A runner marking an item
+ * Pending picks it up for themselves if nobody else owns it yet.
+ */
+export async function setConditionItem(
+  stockBoardVehicleId: string,
+  noPlate: string,
+  vehicle: string,
+  conditionType: string,
+  status: "pending" | "done",
+  remark: string
+) {
+  const { profile, supabase } = await requireStaff();
+  if (!stockBoardVehicleId || !conditionType) throw new Error("Pick a car and a condition item.");
+
+  const actor = profile.full_name || "Staff";
+  const { data: existing, error: findErr } = await supabase
+    .from("recon_tasks")
+    .select("id, runner_id")
+    .eq("stock_board_vehicle_id", stockBoardVehicleId)
+    .eq("task_kind", "condition")
+    .eq("condition_type", conditionType)
+    .maybeSingle();
+  if (findErr) throw new Error(findErr.message);
+
+  const completion =
+    status === "done"
+      ? { completed_by_name: actor, completed_at: new Date().toISOString() }
+      : { completed_by_name: null, completed_at: null };
+
+  if (existing) {
+    const claim =
+      status === "pending" && profile.role === "runner" && !existing.runner_id
+        ? { runner_id: profile.id, runner_name: actor }
+        : {};
+    const { error } = await supabase
+      .from("recon_tasks")
+      .update({ status, remark, ...completion, ...claim })
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const isRunner = profile.role === "runner";
+    let sortOrder = 0;
+    if (isRunner) {
+      const { count } = await supabase
+        .from("recon_tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("runner_id", profile.id)
+        .eq("status", "pending");
+      sortOrder = count ?? 0;
+    }
+    const { error } = await supabase.from("recon_tasks").insert({
+      stock_board_vehicle_id: stockBoardVehicleId,
+      no_plate: noPlate,
+      vehicle,
+      task_kind: "condition",
+      condition_type: conditionType,
+      status,
+      remark,
+      runner_id: isRunner ? profile.id : null,
+      runner_name: isRunner ? actor : "",
+      sort_order: sortOrder,
+      created_by_name: actor,
+      ...completion,
+    });
+    if (error) throw new Error(error.message);
+  }
   revalidatePath("/recon");
   revalidatePath("/stock-board");
 }

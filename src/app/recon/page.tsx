@@ -3,6 +3,7 @@ import { TopNav } from "@/components/TopNav";
 import { fetchStockBoardVehicles } from "@/lib/stockBoard";
 import {
   fetchCarLocations,
+  fetchConditionItems,
   fetchReconTasks,
   fetchReconTasksForRunner,
   fetchRunnerProfiles,
@@ -17,8 +18,9 @@ export default async function ReconPage() {
   const { profile, supabase } = await requireStaff();
 
   if (profile.role === "runner") {
-    const [allVehicles, reconTasks, signingBookings, allPuspakom, timeLogs] = await Promise.all([
+    const [allVehicles, checklistItems, reconTasks, signingBookings, allPuspakom, timeLogs] = await Promise.all([
       fetchStockBoardVehicles(),
+      fetchConditionItems(supabase),
       fetchReconTasksForRunner(supabase, profile.id),
       fetchSigningBookingsForRunner(supabase, profile.id),
       fetchPuspakomBookings(supabase),
@@ -32,6 +34,7 @@ export default async function ReconPage() {
         <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["My Tasks"]} />
         <RunnerTaskBoard
           vehicles={vehicles}
+          checklistItems={checklistItems}
           reconTasks={reconTasks}
           signingBookings={signingBookings}
           puspakomBookings={puspakomBookings}

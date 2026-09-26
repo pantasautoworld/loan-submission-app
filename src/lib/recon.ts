@@ -95,6 +95,13 @@ export async function fetchReconTasksForRunner(
   return (data ?? []) as ReconTaskRow[];
 }
 
+/** Every car's condition-checklist rows (any runner) - the checklist is shared per car, so a runner needs to see items others already marked. */
+export async function fetchConditionItems(supabase: SupabaseClient): Promise<ReconTaskRow[]> {
+  const { data, error } = await supabase.from("recon_tasks").select("*").eq("task_kind", "condition");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ReconTaskRow[];
+}
+
 export async function fetchRunnerTimeLogs(
   supabase: SupabaseClient,
   runnerId?: string

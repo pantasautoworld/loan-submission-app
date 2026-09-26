@@ -70,34 +70,39 @@ export async function resetStaffPassword(profileId: string, newPassword: string)
   revalidatePath("/staff");
 }
 
+/**
+ * Updates another person's profile row. Uses the service-role client because RLS on profiles only
+ * lets a user update their own row - through the logged-in session these writes matched zero rows
+ * and "succeeded" silently. requireAdmin() has already gated the caller by this point.
+ */
+async function updateProfile(profileId: string, fields: Record<string, string | boolean>, failMessage: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("profiles").update(fields).eq("id", profileId).select("id");
+  if (error || !data || data.length === 0) throw new Error(failMessage);
+}
+
 export async function updateStaffPhoto(profileId: string, avatarPath: string) {
-  const { supabase } = await requireAdmin();
-  const { error } = await supabase
-    .from("profiles")
-    .update({ avatar_path: avatarPath })
-    .eq("id", profileId);
-  if (error) throw new Error("Could not update the photo.");
+  await requireAdmin();
+  await updateProfile(profileId, { avatar_path: avatarPath }, "Could not update the photo.");
   revalidatePath("/staff");
   revalidatePath("/");
 }
 
 export async function updateStaffRole(profileId: string, role: "admin" | "sales" | "runner") {
-  const { profile, supabase } = await requireAdmin();
+  const { profile } = await requireAdmin();
   if (profileId === profile.id && role !== "admin") {
     throw new Error("You can't remove your own admin access.");
   }
-  const { error } = await supabase.from("profiles").update({ role }).eq("id", profileId);
-  if (error) throw new Error("Could not update the role.");
+  await updateProfile(profileId, { role }, "Could not update the role.");
   revalidatePath("/staff");
 }
 
 export async function updateStaffActive(profileId: string, isActive: boolean) {
-  const { profile, supabase } = await requireAdmin();
+  const { profile } = await requireAdmin();
   if (profileId === profile.id && !isActive) {
     throw new Error("You can't deactivate your own account.");
   }
-  const { error } = await supabase.from("profiles").update({ is_active: isActive }).eq("id", profileId);
-  if (error) throw new Error("Could not update the account status.");
+  await updateProfile(profileId, { is_active: isActive }, "Could not update the account status.");
   revalidatePath("/staff");
   revalidatePath("/stock-board");
 }

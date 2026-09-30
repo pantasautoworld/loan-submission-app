@@ -60,6 +60,7 @@ export function InvoiceApp({ role, invoices }: Props) {
                 <th className="px-3 py-2.5">Buyer</th>
                 <th className="px-3 py-2.5">Vehicle</th>
                 <th className="px-3 py-2.5">Selling Price</th>
+                <th className="px-3 py-2.5">Loan Amount (RM)</th>
                 <th className="px-3 py-2.5">Agent</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
@@ -74,6 +75,7 @@ export function InvoiceApp({ role, invoices }: Props) {
                     {inv.vehicle_no} {inv.model && `· ${inv.model}`}
                   </td>
                   <td className="px-3 py-2.5 font-mono text-fg">{fmtMoney(inv.selling_price)}</td>
+                  <td className="px-3 py-2.5 font-mono text-fg">{fmtMoney(inv.loan_amount)}</td>
                   <td className="px-3 py-2.5 text-muted">{inv.agent_name}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-3">

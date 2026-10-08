@@ -219,6 +219,11 @@ export async function saveVehicle(
     if (STATUSES_WITH_SUBMISSION.has(input.status)) {
       merged.submittedBy = input.submittedBy;
       merged.submissionDate = input.submissionDate;
+    } else {
+      // Back to Available: the car is no longer in a loan, so clear who/when it was submitted
+      // rather than letting the previous submission's details linger on the record.
+      delete merged.submittedBy;
+      delete merged.submissionDate;
     }
     if (input.status === "reserved") merged.approvalDate = input.approvalDate;
     if (input.status === "sold") merged.soldDate = input.soldDate;

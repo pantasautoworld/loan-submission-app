@@ -141,10 +141,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // stays a one-time "packet generated" ping rather than firing on every retry.
     const { data: beforeGenerate } = await supabase
       .from("submissions")
-      .select("status")
+      .select("status, created_by")
       .eq("id", submissionId)
       .single();
     const alreadyGenerated = beforeGenerate?.status === "generated";
+
+    // Name of the staff member who prepared this submission - falls back to whoever
+    // clicked Generate if the creator's profile can't be found.
+    const { data: staffProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", beforeGenerate?.created_by ?? user.id)
+      .maybeSingle();
+    const submittedByName = staffProfile?.full_name?.trim() || "-";
 
     await supabase.from("submissions").update({ status: "generated" }).eq("id", submissionId);
 
@@ -152,7 +161,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       void notifyTelegram(
         `📄 <b>Submission generated</b>\n` +
           `Hirer: ${doc.hirer.name || "-"}\n` +
-          `Vehicle: ${doc.vehicle.plateNo || "-"} ${doc.vehicle.model || ""}`.trim()
+          `Vehicle: ${doc.vehicle.plateNo || "-"} ${doc.vehicle.model || ""}`.trim() +
+          `\nSubmitted by: ${submittedByName}`
       );
     }
 

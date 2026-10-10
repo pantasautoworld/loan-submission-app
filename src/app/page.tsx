@@ -137,6 +137,72 @@ export default async function HomePage({
     <div className="flex flex-1 flex-col">
       <TopNav staffName={profile.full_name} role={profile.role} />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-4 p-6">
+        <div className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#6b21a8] via-[#c026d3] to-[#f97316] p-5 shadow-xl">
+          <div className="pointer-events-none absolute -left-10 -top-14 h-44 w-44 animate-pulse rounded-full bg-amber-300/25 blur-2xl" />
+          <div className="pointer-events-none absolute -right-8 -top-4 h-36 w-36 animate-pulse rounded-full bg-cyan-300/25 blur-2xl [animation-delay:500ms]" />
+          <div className="pointer-events-none absolute -bottom-10 left-1/3 h-32 w-32 animate-pulse rounded-full bg-pink-400/20 blur-2xl [animation-delay:1000ms]" />
+          <div className="pointer-events-none absolute -bottom-6 right-6 h-24 w-24 animate-pulse rounded-full bg-yellow-300/20 blur-xl [animation-delay:1500ms]" />
+
+          <div className="relative">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-white px-6 py-1.5 shadow-[0_0_20px_rgba(251,191,36,0.6)]">
+                <span className="text-sm font-extrabold uppercase tracking-widest text-violet-700">
+                  Leaderboard
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-sm text-fuchsia-50">Most cases submitted in {monthLabel}.</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <LeaderboardMonthPicker options={monthOptions} value={summaryMonthValue} />
+              <a
+                href={`/api/leaderboard/summary-pdf?month=${summaryMonthValue}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-white"
+              >
+                Download PDF
+              </a>
+            </div>
+
+            {leaderboard.length === 0 ? (
+              <p className="mt-6 text-center text-sm text-fuchsia-50">
+                No cases submitted in {monthLabel}.
+              </p>
+            ) : (
+              <>
+                <div className="mt-6 flex items-end justify-center gap-4 sm:gap-8">
+                  <PodiumSlot entry={second} rank={2} />
+                  <PodiumSlot entry={first} rank={1} />
+                  <PodiumSlot entry={third} rank={3} />
+                </div>
+
+                {rest.length > 0 && (
+                  <ol className="mt-6 space-y-2">
+                    {rest.map((entry, i) => (
+                      <li
+                        key={`${entry.name}-${i}`}
+                        className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-3 py-2.5 shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-extrabold text-violet-700">
+                            {i + 4}
+                          </span>
+                          <Avatar entry={entry} className="h-12 w-12 text-base" />
+                          <span className="truncate text-sm font-semibold text-violet-950">
+                            {entry.name}
+                          </span>
+                        </div>
+                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-3 py-1 text-xs font-bold text-white shadow">
+                          {entry.count} {entry.count === 1 ? "case" : "cases"}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
+            )}
+          </div>
+        </div>
         <h1 className="font-display text-xl text-fg">Welcome, {profile.full_name || "there"}</h1>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Link
@@ -535,73 +601,6 @@ export default async function HomePage({
               Schedule signing appointments and assign a runner.
             </p>
           </Link>
-        </div>
-
-        <div className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#6b21a8] via-[#c026d3] to-[#f97316] p-5 shadow-xl">
-          <div className="pointer-events-none absolute -left-10 -top-14 h-44 w-44 animate-pulse rounded-full bg-amber-300/25 blur-2xl" />
-          <div className="pointer-events-none absolute -right-8 -top-4 h-36 w-36 animate-pulse rounded-full bg-cyan-300/25 blur-2xl [animation-delay:500ms]" />
-          <div className="pointer-events-none absolute -bottom-10 left-1/3 h-32 w-32 animate-pulse rounded-full bg-pink-400/20 blur-2xl [animation-delay:1000ms]" />
-          <div className="pointer-events-none absolute -bottom-6 right-6 h-24 w-24 animate-pulse rounded-full bg-yellow-300/20 blur-xl [animation-delay:1500ms]" />
-
-          <div className="relative">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-white px-6 py-1.5 shadow-[0_0_20px_rgba(251,191,36,0.6)]">
-                <span className="text-sm font-extrabold uppercase tracking-widest text-violet-700">
-                  Leaderboard
-                </span>
-              </div>
-            </div>
-            <p className="mt-2 text-center text-sm text-fuchsia-50">Most cases submitted in {monthLabel}.</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <LeaderboardMonthPicker options={monthOptions} value={summaryMonthValue} />
-              <a
-                href={`/api/leaderboard/summary-pdf?month=${summaryMonthValue}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-white"
-              >
-                Download PDF
-              </a>
-            </div>
-
-            {leaderboard.length === 0 ? (
-              <p className="mt-6 text-center text-sm text-fuchsia-50">
-                No cases submitted in {monthLabel}.
-              </p>
-            ) : (
-              <>
-                <div className="mt-6 flex items-end justify-center gap-4 sm:gap-8">
-                  <PodiumSlot entry={second} rank={2} />
-                  <PodiumSlot entry={first} rank={1} />
-                  <PodiumSlot entry={third} rank={3} />
-                </div>
-
-                {rest.length > 0 && (
-                  <ol className="mt-6 space-y-2">
-                    {rest.map((entry, i) => (
-                      <li
-                        key={`${entry.name}-${i}`}
-                        className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-3 py-2.5 shadow-sm"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-extrabold text-violet-700">
-                            {i + 4}
-                          </span>
-                          <Avatar entry={entry} className="h-12 w-12 text-base" />
-                          <span className="truncate text-sm font-semibold text-violet-950">
-                            {entry.name}
-                          </span>
-                        </div>
-                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-3 py-1 text-xs font-bold text-white shadow">
-                          {entry.count} {entry.count === 1 ? "case" : "cases"}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </>
-            )}
-          </div>
         </div>
       </main>
     </div>

@@ -70,6 +70,19 @@ export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
     }
     return map;
   }, [bookings]);
+  const supplierByVehicle = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of vehicles) if (v.supplier) map.set(v.id, v.supplier);
+    return map;
+  }, [vehicles]);
+
+  /** "CARSOME · KIWI" - the car's supplier then the booking's company (older bookings already carry both in the company text). */
+  function supplierAndCompany(vehicleId: string, company: string): string {
+    const supplier = supplierByVehicle.get(vehicleId) ?? "";
+    const hasSupplier = !supplier || company.toUpperCase().includes(supplier.toUpperCase());
+    return [hasSupplier ? "" : supplier, company].filter(Boolean).join(" · ");
+  }
+
   const withBooking = vehicles.filter((v) => bookingByVehicle.has(v.id));
   const withoutBooking = vehicles.filter((v) => !bookingByVehicle.has(v.id));
 
@@ -241,6 +254,11 @@ export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
                         {v.vin}
                       </div>
                       <div className="mt-1 truncate text-sm text-fg">{v.vehicle}</div>
+                      {(v.supplier || v.company) && (
+                        <div className="truncate text-[11px] text-muted">
+                          {[v.supplier, v.company].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
                     </div>
                     <span
                       className={`flex-shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
@@ -276,6 +294,11 @@ export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
                       {v.vin}
                     </div>
                     <div className="mt-1 truncate text-sm text-fg">{v.vehicle}</div>
+                      {(v.supplier || v.company) && (
+                        <div className="truncate text-[11px] text-muted">
+                          {[v.supplier, v.company].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
                   </div>
                   <span className="flex-shrink-0 text-xs text-amber">+ Add booking</span>
                 </button>
@@ -298,7 +321,11 @@ export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
               {selected.no_plate}
             </div>
             <div className="font-display mt-2 text-base font-semibold text-fg">{selected.vehicle}</div>
-            {selected.company && <div className="text-sm text-muted">{selected.company}</div>}
+            {supplierAndCompany(selected.stock_board_vehicle_id, selected.company) && (
+              <div className="text-sm text-muted">
+                {supplierAndCompany(selected.stock_board_vehicle_id, selected.company)}
+              </div>
+            )}
             <div className="mt-1 text-sm text-muted">
               {new Date(selected.appointment_date + "T00:00:00").toLocaleDateString(undefined, {
                 weekday: "long",
@@ -393,7 +420,11 @@ export function PuspakomApp({ role, vehicles, bookings, runners }: Props) {
                           {b.no_plate}
                         </div>
                         <div className="mt-1 text-sm font-semibold text-fg">{b.vehicle}</div>
-                        {b.company && <div className="text-xs text-muted">{b.company}</div>}
+                        {supplierAndCompany(b.stock_board_vehicle_id, b.company) && (
+                          <div className="text-xs text-muted">
+                            {supplierAndCompany(b.stock_board_vehicle_id, b.company)}
+                          </div>
+                        )}
                         <div className="text-xs text-muted">
                           {b.appointment_time && `${fmtTime(b.appointment_time)} · `}
                           {b.branch || "No branch set"}

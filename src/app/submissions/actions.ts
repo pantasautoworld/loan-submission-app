@@ -9,10 +9,10 @@ import { notifyTelegram } from "@/lib/telegram";
  * Admin-only: records that this submission was reviewed and actually sent to
  * the credit company. This is what assigns the ticket number (a DB trigger
  * fires the moment submitted_at is first set - see the
- * move_ticket_no_to_submitted_action / ticket_prefix_from_submitter_username
- * migrations), prefixed with the submitting admin's own username, and sends
- * the one-time Telegram notification, so regenerating the packet afterwards
- * never re-triggers either.
+ * move_ticket_no_to_submitted_action / ticket_prefix_from_case_creator
+ * migrations), prefixed with the name of the staff member who created the
+ * case (not the admin clicking this), and sends the one-time Telegram
+ * notification, so regenerating the packet afterwards never re-triggers either.
  */
 export async function markSubmitted(submissionId: string) {
   const { supabase, profile } = await requireAdmin();

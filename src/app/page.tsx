@@ -177,23 +177,26 @@ export default async function HomePage({
                 </div>
 
                 {rest.length > 0 && (
-                  <ol className="mt-6 space-y-2">
+                  <ol className="mt-4 grid grid-cols-2 gap-2">
                     {rest.map((entry, i) => (
                       <li
                         key={`${entry.name}-${i}`}
-                        className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-3 py-2.5 shadow-sm"
+                        className="flex min-w-0 items-center justify-between gap-1.5 rounded-full bg-white/95 px-2 py-1.5 shadow-sm"
                       >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-extrabold text-violet-700">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-extrabold text-violet-700">
                             {i + 4}
                           </span>
-                          <Avatar entry={entry} className="h-12 w-12 text-base" />
-                          <span className="truncate text-sm font-semibold text-violet-950">
+                          <span className="hidden sm:block">
+                            <Avatar entry={entry} className="h-9 w-9 text-xs" />
+                          </span>
+                          <span className="truncate text-xs font-semibold text-violet-950 sm:text-sm">
                             {entry.name}
                           </span>
                         </div>
-                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-3 py-1 text-xs font-bold text-white shadow">
-                          {entry.count} {entry.count === 1 ? "case" : "cases"}
+                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-2 py-0.5 text-xs font-bold text-white shadow">
+                          {entry.count}
+                          <span className="hidden sm:inline"> {entry.count === 1 ? "case" : "cases"}</span>
                         </span>
                       </li>
                     ))}

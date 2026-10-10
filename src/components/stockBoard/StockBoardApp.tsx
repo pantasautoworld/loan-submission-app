@@ -104,7 +104,7 @@ export function StockBoardApp({
   const [puspakomFilter, setPuspakomFilter] = useState<"" | "pending" | "done">("");
   // "" = all cars, "__none" = cars with no location set, otherwise one location name
   const [locationFilter, setLocationFilter] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"recent" | "submittedBy">("recent");
+  const [sortBy, setSortBy] = useState<"recent" | "submittedBy" | "company">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
   const [photoCache, setPhotoCache] = useState<Record<string, string | null>>({});
@@ -187,6 +187,21 @@ export function StockBoardApp({
       return list.sort((a, b) => {
         const byStaff = (a.submittedBy || "￿").localeCompare(b.submittedBy || "￿");
         if (byStaff !== 0) return byStaff;
+        return (
+          new Date(b.updatedAt || b.addedAt || 0).getTime() -
+          new Date(a.updatedAt || a.addedAt || 0).getTime()
+        );
+      });
+    }
+
+    if (sortBy === "company") {
+      // Grouped by company (KIWI, then PANTAS; cars with none last), then by supplier, then most recent first.
+      const blankLast = "￿";
+      return list.sort((a, b) => {
+        const byCompany = (a.company || blankLast).localeCompare(b.company || blankLast);
+        if (byCompany !== 0) return byCompany;
+        const bySupplier = (a.supplier || blankLast).localeCompare(b.supplier || blankLast);
+        if (bySupplier !== 0) return bySupplier;
         return (
           new Date(b.updatedAt || b.addedAt || 0).getTime() -
           new Date(a.updatedAt || a.addedAt || 0).getTime()
@@ -293,11 +308,12 @@ export function StockBoardApp({
         </select>
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as "recent" | "submittedBy")}
+          onChange={(e) => setSortBy(e.target.value as "recent" | "submittedBy" | "company")}
           className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
         >
           <option value="recent">Sort: Most recent</option>
           <option value="submittedBy">Sort: Staff submitted</option>
+          <option value="company">Sort: Company</option>
         </select>
         <select
           value={depositFilter}

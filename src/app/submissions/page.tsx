@@ -5,7 +5,7 @@ import { DownloadLink } from "@/components/DownloadLink";
 import { DeleteSubmissionButton } from "@/components/DeleteSubmissionButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { UndoSubmitButton } from "@/components/UndoSubmitButton";
-import { SubmissionsMonthPicker } from "@/components/SubmissionsMonthPicker";
+import { SubmissionsFilters } from "@/components/SubmissionsFilters";
 import { MALAYSIA_TZ, malaysiaDateParts, malaysiaMonthStartIso } from "@/lib/timezone";
 
 /**
@@ -27,10 +27,10 @@ function formatMalaysiaDateTime(iso: string): string {
 export default async function SubmissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; staff?: string; status?: string }>;
 }) {
   const { profile, supabase } = await requireSalesStaff();
-  const { month: monthParam } = await searchParams;
+  const { month: monthParam, staff: staffParam, status: statusParam } = await searchParams;
 
   // Computed in Malaysia time (not the server's own UTC) so "this month" matches
   // what staff actually mean, especially near a day/month boundary.
@@ -77,6 +77,26 @@ export default async function SubmissionsPage({
     .lt("created_at", monthEnd)
     .order("created_at", { ascending: false });
 
+  // Staff = whoever created the case. The dropdown only lists staff who have cases in this month,
+  // so an old/unknown staff id in the URL (e.g. after switching months) quietly falls back to "all".
+  const allSubmissions = submissions ?? [];
+  const creators = new Map<string, string>();
+  for (const s of allSubmissions) {
+    const name = (s.profiles as unknown as { full_name: string } | null)?.full_name;
+    if (s.created_by && name) creators.set(s.created_by, name);
+  }
+  const staffOptions = [...creators.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const staffFilter = staffParam && creators.has(staffParam) ? staffParam : "";
+  const statusFilter = statusParam === "submitted" || statusParam === "pending" ? statusParam : "";
+  const rows = allSubmissions.filter(
+    (s) =>
+      (!staffFilter || s.created_by === staffFilter) &&
+      (!statusFilter || (statusFilter === "submitted" ? !!s.submitted_at : !s.submitted_at))
+  );
+  const filtersActive = !!staffFilter || !!statusFilter;
+
   return (
     <div className="flex flex-1 flex-col">
       <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Submissions"]} />
@@ -84,7 +104,13 @@ export default async function SubmissionsPage({
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <h1 className="font-display text-xl text-fg">Submissions</h1>
           <div className="flex items-center gap-2.5">
-            <SubmissionsMonthPicker options={monthOptions} value={`${myYear}-${String(myMonth).padStart(2, "0")}`} />
+            <SubmissionsFilters
+              monthOptions={monthOptions}
+              month={`${myYear}-${String(myMonth).padStart(2, "0")}`}
+              staffOptions={staffOptions}
+              staff={staffFilter}
+              status={statusFilter}
+            />
             <Link
               href="/submissions/new"
               className="rounded-[7px] bg-amber px-3 py-1.5 text-sm font-semibold text-amber-fg hover:brightness-110"
@@ -109,7 +135,7 @@ export default async function SubmissionsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {(submissions ?? []).map((s) => {
+              {rows.map((s) => {
                 const hirer = (s.persons as { role: string; name: string }[] | null)?.find(
                   (p) => p.role === "hirer"
                 );
@@ -186,10 +212,12 @@ export default async function SubmissionsPage({
                   </tr>
                 );
               })}
-              {(!submissions || submissions.length === 0) && (
+              {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-6 text-center text-muted">
-                    No submissions created in {monthLabel}.
+                    {filtersActive
+                      ? `No submissions match these filters in ${monthLabel}.`
+                      : `No submissions created in ${monthLabel}.`}
                   </td>
                 </tr>
               )}

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { compressImage } from "@/lib/compressImage";
 import {
+  COMPANY_OPTIONS,
+  SUPPLIER_OPTIONS,
   deletePhoto,
   fetchPhoto,
   findById,
@@ -44,6 +46,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
   const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? "prep");
   const [notes, setNotes] = useState(vehicle?.notes ?? "");
   const [company, setCompany] = useState(vehicle?.company ?? "");
+  const [supplier, setSupplier] = useState(vehicle?.supplier ?? "");
   const [submittedBy, setSubmittedBy] = useState(vehicle?.submittedBy ?? "");
   const [submissionDate, setSubmissionDate] = useState(vehicle?.submissionDate ?? "");
   const [approvalDate, setApprovalDate] = useState(vehicle?.approvalDate ?? "");
@@ -85,6 +88,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
         setStatus(fresh.status);
         setNotes(fresh.notes);
         setCompany(fresh.company ?? "");
+        setSupplier(fresh.supplier ?? "");
         setSubmittedBy(fresh.submittedBy ?? "");
         setSubmissionDate(fresh.submissionDate ?? "");
         setApprovalDate(fresh.approvalDate ?? "");
@@ -140,6 +144,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
         status,
         notes: notes.trim(),
         company: company.trim(),
+        supplier: supplier.trim(),
       };
       if (status === "prep" || status === "reserved" || status === "sold") {
         input.submittedBy = submittedBy;
@@ -162,6 +167,12 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
       setIsSaving(false);
     }
   }
+
+  // Keep a car's current value selectable even if it isn't in the standard lists (older or one-off entries).
+  const companyOptions: string[] =
+    company && !(COMPANY_OPTIONS as readonly string[]).includes(company) ? [company, ...COMPANY_OPTIONS] : [...COMPANY_OPTIONS];
+  const supplierOptions: string[] =
+    supplier && !(SUPPLIER_OPTIONS as readonly string[]).includes(supplier) ? [supplier, ...SUPPLIER_OPTIONS] : [...SUPPLIER_OPTIONS];
 
   const submittedByOptions = submittedBy && !staffNames.includes(submittedBy)
     ? [submittedBy, ...staffNames]
@@ -231,13 +242,30 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
         <label className={LABEL}>Tahun</label>
         <input type="number" className={FIELD} value={tahun} onChange={(e) => setTahun(e.target.value)} />
 
-        <label className={LABEL}>Company</label>
-        <input
-          className={FIELD}
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="e.g. ELK-DESA"
-        />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className={LABEL}>Company</label>
+            <select className={FIELD} value={company} onChange={(e) => setCompany(e.target.value)}>
+              <option value="">Not set</option>
+              {companyOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>Supplier</label>
+            <select className={FIELD} value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+              <option value="">Not set</option>
+              {supplierOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         <label className={LABEL}>Status</label>
         <select

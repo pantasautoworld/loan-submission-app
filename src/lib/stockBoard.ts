@@ -29,8 +29,10 @@ export interface StockBoardVehicle {
   notes: string;
   cost: string;
   deposit: string;
-  /** Financing company for this loan, e.g. "ELK-DESA" - shown next to the status tag. */
+  /** Which of our companies owns this car - one of COMPANY_OPTIONS (KIWI / PANTAS). Shown next to the status tag. */
   company?: string;
+  /** Where the car was sourced from - normally one of SUPPLIER_OPTIONS (CARSOME, GMART, ...). */
+  supplier?: string;
   addedBy?: string;
   addedAt?: string;
   updatedBy?: string;
@@ -42,6 +44,12 @@ export interface StockBoardVehicle {
   /** Firebase's array key for this record (e.g. "5") - needed to write back to it. */
   _key: string;
 }
+
+/** The two companies that own stock. */
+export const COMPANY_OPTIONS = ["KIWI", "PANTAS"] as const;
+
+/** Where stock is sourced from. A car can still carry another supplier name (e.g. one-off ones) - the form keeps it as typed. */
+export const SUPPLIER_OPTIONS = ["CARSOME", "GMART", "SPANCO", "MYTUKAR"] as const;
 
 export interface ActivityLogEntry {
   who: string;
@@ -60,6 +68,7 @@ export interface SaveVehicleInput {
   status: StockBoardVehicle["status"];
   notes: string;
   company: string;
+  supplier: string;
   submittedBy?: string;
   submissionDate?: string;
   approvalDate?: string;

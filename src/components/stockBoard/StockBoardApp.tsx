@@ -421,8 +421,19 @@ export function StockBoardApp({
                         RM{depositCollected.toLocaleString()} of RM{depositRequired.toLocaleString()}
                       </span>
                     )}
+                    {v.supplier && (
+                      <span
+                        title="Supplier"
+                        className="rounded-full border border-sync/60 px-2.5 py-0.5 text-[11px] text-sync"
+                      >
+                        {v.supplier}
+                      </span>
+                    )}
                     {v.company && (
-                      <span className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted">
+                      <span
+                        title="Company"
+                        className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted"
+                      >
                         {v.company}
                       </span>
                     )}

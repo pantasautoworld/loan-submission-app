@@ -13,8 +13,12 @@ export function DownloadLink({ path }: { path: string }) {
   }
 
   return (
-    <button onClick={download} className="text-xs text-amber hover:underline">
-      Download PDF
+    <button
+      onClick={download}
+      className="text-xs text-amber hover:underline"
+      title="Download the submission packet PDF"
+    >
+      File 1
     </button>
   );
 }

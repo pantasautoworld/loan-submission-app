@@ -166,14 +166,15 @@ export default async function SubmissionsPage({
                           className="text-xs text-amber hover:underline"
                           title="Excel that builds the pre-filled HP application Google Form link"
                         >
-                          Download Excel
+                          ELK LINK
                         </a>
                         {s.status === "generated" && profile.role === "admin" && (
                           <Link
                             href={`/submissions/${s.id}/income`}
                             className="text-xs text-amber hover:underline"
+                            title="Income documents"
                           >
-                            Income Documents
+                            File 2
                           </Link>
                         )}
                         <DeleteSubmissionButton

@@ -161,13 +161,6 @@ export default async function SubmissionsPage({
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-3">
                         {latestDoc && <DownloadLink path={latestDoc.pdf_path} />}
-                        <a
-                          href={`/api/submissions/${s.id}/hp-autofill`}
-                          className="text-xs text-amber hover:underline"
-                          title="Excel that builds the pre-filled HP application Google Form link"
-                        >
-                          ELK LINK
-                        </a>
                         {s.status === "generated" && profile.role === "admin" && (
                           <Link
                             href={`/submissions/${s.id}/income`}
@@ -177,6 +170,13 @@ export default async function SubmissionsPage({
                             File 2
                           </Link>
                         )}
+                        <a
+                          href={`/api/submissions/${s.id}/hp-autofill`}
+                          className="text-xs text-amber hover:underline"
+                          title="Excel that builds the pre-filled HP application Google Form link"
+                        >
+                          ELK LINK
+                        </a>
                         <DeleteSubmissionButton
                           submissionId={s.id}
                           label={hirer?.name || "(unnamed)"}

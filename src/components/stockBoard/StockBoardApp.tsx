@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  COMPANY_OPTIONS,
+  SUPPLIER_OPTIONS,
   deleteVehicle,
   fetchPhoto,
   refreshStockBoardVehicles,
@@ -104,6 +106,9 @@ export function StockBoardApp({
   const [puspakomFilter, setPuspakomFilter] = useState<"" | "pending" | "done">("");
   // "" = all cars, "__none" = cars with no location set, otherwise one location name
   const [locationFilter, setLocationFilter] = useState<string>("");
+  // "" = all, "__none" = cars with none set, otherwise one company / supplier name
+  const [companyFilter, setCompanyFilter] = useState<string>("");
+  const [supplierFilter, setSupplierFilter] = useState<string>("");
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy" | "company">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
@@ -159,6 +164,15 @@ export function StockBoardApp({
     return Array.from(new Set([...staffNames, ...fromVehicles])).sort((a, b) => a.localeCompare(b));
   }, [vehicles, staffNames]);
 
+  const companyFilterOptions = useMemo(() => {
+    const extras = vehicles.map((v) => v.company).filter((c): c is string => !!c && !(COMPANY_OPTIONS as readonly string[]).includes(c));
+    return [...COMPANY_OPTIONS, ...Array.from(new Set(extras)).sort()];
+  }, [vehicles]);
+  const supplierFilterOptions = useMemo(() => {
+    const extras = vehicles.map((v) => v.supplier).filter((c): c is string => !!c && !(SUPPLIER_OPTIONS as readonly string[]).includes(c));
+    return [...SUPPLIER_OPTIONS, ...Array.from(new Set(extras)).sort()];
+  }, [vehicles]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = vehicles.filter((v) => {
@@ -173,6 +187,16 @@ export function StockBoardApp({
         if (puspakomStatusByVehicle[v.id]) return false; // already has a booking (scheduled or done)
       } else if (puspakomFilter === "done") {
         if (!puspakomStatusByVehicle[v.id]) return false; // not booked yet
+      }
+      if (companyFilter === "__none") {
+        if (v.company) return false;
+      } else if (companyFilter) {
+        if (v.company !== companyFilter) return false;
+      }
+      if (supplierFilter === "__none") {
+        if (v.supplier) return false;
+      } else if (supplierFilter) {
+        if (v.supplier !== supplierFilter) return false;
       }
       if (locationFilter === "__none") {
         if (locationByVehicle[v.id]) return false;
@@ -224,6 +248,8 @@ export function StockBoardApp({
     puspakomFilter,
     puspakomStatusByVehicle,
     locationFilter,
+    companyFilter,
+    supplierFilter,
     locationByVehicle,
     sortBy,
   ]);
@@ -345,6 +371,32 @@ export function StockBoardApp({
             </option>
           ))}
           <option value="__none">No location set</option>
+        </select>
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All companies</option>
+          {companyFilterOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__none">No company set</option>
+        </select>
+        <select
+          value={supplierFilter}
+          onChange={(e) => setSupplierFilter(e.target.value)}
+          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+        >
+          <option value="">All suppliers</option>
+          {supplierFilterOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__none">No supplier set</option>
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}

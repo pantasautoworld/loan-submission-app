@@ -128,7 +128,7 @@ export default async function HomePage({
     };
   });
 
-  const { leaderboard } = await fetchLeaderboardData(supabase, monthStart, monthEnd);
+  const { leaderboard, details } = await fetchLeaderboardData(supabase, monthStart, monthEnd);
   const [first, second, third] = leaderboard;
   const rest = leaderboard.slice(3);
   const summaryMonthValue = `${myYear}-${String(myMonth).padStart(2, "0")}`;
@@ -144,6 +144,17 @@ export default async function HomePage({
           <div className="pointer-events-none absolute -bottom-6 right-6 h-24 w-24 animate-pulse rounded-full bg-yellow-300/20 blur-xl [animation-delay:1500ms]" />
 
           <div className="relative">
+            <div
+              className="absolute right-0 top-0 rounded-xl bg-white/20 px-2.5 py-1 text-center text-white shadow-sm"
+              title={`Total cases submitted in ${monthLabel}`}
+            >
+              <div className="text-[9px] font-bold uppercase leading-tight tracking-wide">
+                Total
+                <br />
+                submitted
+              </div>
+              <div className="text-lg font-extrabold leading-none">{details.length}</div>
+            </div>
             <div className="flex justify-center">
               <div className="rounded-full bg-white px-6 py-1.5 shadow-[0_0_20px_rgba(251,191,36,0.6)]">
                 <span className="text-sm font-extrabold uppercase tracking-widest text-violet-700">
@@ -181,23 +192,22 @@ export default async function HomePage({
                     {rest.map((entry, i) => (
                       <li
                         key={`${entry.name}-${i}`}
-                        className="flex min-w-0 items-center justify-between gap-1.5 rounded-full bg-white/95 px-2 py-1.5 shadow-sm"
+                        className="flex min-w-0 items-center gap-2 rounded-2xl bg-white/95 p-1.5 shadow-sm"
                       >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-extrabold text-violet-700">
-                            {i + 4}
-                          </span>
-                          <span className="hidden sm:block">
-                            <Avatar entry={entry} className="h-9 w-9 text-xs" />
-                          </span>
-                          <span className="truncate text-xs font-semibold text-violet-950 sm:text-sm">
+                        <Avatar entry={entry} className="h-10 w-10 text-sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-violet-950 sm:text-sm">
                             {entry.name}
-                          </span>
+                          </p>
+                          <div className="mt-0.5 flex items-center gap-1">
+                            <span className="rounded-full bg-violet-100 px-1.5 text-[10px] font-extrabold text-violet-700">
+                              #{i + 4}
+                            </span>
+                            <span className="rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-1.5 text-[10px] font-bold text-white shadow">
+                              {entry.count} {entry.count === 1 ? "case" : "cases"}
+                            </span>
+                          </div>
                         </div>
-                        <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-fuchsia-600 to-orange-500 px-2 py-0.5 text-xs font-bold text-white shadow">
-                          {entry.count}
-                          <span className="hidden sm:inline"> {entry.count === 1 ? "case" : "cases"}</span>
-                        </span>
                       </li>
                     ))}
                   </ol>

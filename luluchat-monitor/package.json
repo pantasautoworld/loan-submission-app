@@ -1,0 +1,16 @@
+{
+  "name": "luluchat-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hourly Telegram report of staff-unreplied LuluChat messages (read-only scrape of the Unread tab)",
+  "scripts": {
+    "login": "node src/login.mjs",
+    "check": "node src/monitor.mjs --dry",
+    "start": "node src/monitor.mjs",
+    "test": "node --test src/"
+  },
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

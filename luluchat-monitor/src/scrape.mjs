@@ -33,6 +33,9 @@ function scrollStep() {
   return { atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 4 };
 }
 
+/** The header phone-icon button; its text reads "Channels (60179952261)" but the accessible name differs. */
+const channelsButton = (page) => page.locator("button", { hasText: /Channels\s*\(/ }).first();
+
 async function openUnreadTab(page) {
   const tab = page.getByRole("tab", { name: /^Unread/ }).first();
   try {
@@ -45,11 +48,14 @@ async function openUnreadTab(page) {
   await sleep(2500); // let the first page of rows render
 }
 
-async function collectUnreadRows(page) {
+async function collectUnreadRows(page, log = () => {}) {
   const seen = new Map();
   let quietPasses = 0;
-  for (let i = 0; i < 400 && quietPasses < 3; i++) {
+  const deadline = Date.now() + 120_000; // hard cap per channel
+  // Stop once several passes in a row find nothing new (the Load More button can stay visible at the very end).
+  for (let i = 0; i < 400 && quietPasses < 4 && Date.now() < deadline; i++) {
     const before = seen.size;
+    if (i % 10 === 0) log(`    ...pass ${i}, ${seen.size} chats so far`);
     for (const r of await page.evaluate(extractRows)) seen.set(`${r.name}|${r.time}|${r.assignee}|${r.preview}`, r);
     const { atBottom } = await page.evaluate(scrollStep);
     await sleep(350);
@@ -58,24 +64,22 @@ async function collectUnreadRows(page) {
       if (await more.isVisible().catch(() => false)) {
         await more.click();
         await sleep(2000);
-        quietPasses = 0;
-        continue;
       }
     }
-    quietPasses = seen.size === before && atBottom ? quietPasses + 1 : 0;
+    quietPasses = seen.size === before ? quietPasses + 1 : 0;
   }
   return [...seen.values()];
 }
 
 /** The header button reads "Channels (60179952261)": which channel is selected right now. */
 async function currentPhone(page) {
-  const label = (await page.getByRole("button", { name: /^Channels/ }).first().innerText().catch(() => "")) || "";
-  const aria = (await page.getByRole("button", { name: /^Channels/ }).first().getAttribute("aria-label").catch(() => "")) || "";
+  const label = (await channelsButton(page).first().innerText().catch(() => "")) || "";
+  const aria = (await channelsButton(page).first().getAttribute("aria-label").catch(() => "")) || "";
   return (label + " " + aria).match(/\d{8,}/)?.[0] ?? "";
 }
 
 async function openChannelModal(page) {
-  await page.getByRole("button", { name: /^Channels/ }).first().click();
+  await channelsButton(page).first().click();
   await page.getByText("Phone Number:").first().waitFor({ state: "visible", timeout: 15_000 });
 }
 
@@ -84,19 +88,14 @@ async function closeChannelModal(page) {
   await sleep(500);
 }
 
-/** Runs in the page: every channel card in the open modal -> { title, phone }. */
+/** Runs in the page: every channel card in the open dialog -> { title, phone }. Parses the dialog text: the title is the line just above "Phone Number: <digits>". */
 function extractChannelCards() {
+  const lines = document.body.innerText.split("\n").map((l) => l.trim()).filter(Boolean);
   const cards = new Map();
-  for (const leaf of document.querySelectorAll("*")) {
-    if (leaf.children.length || !/^Phone Number:/.test(leaf.textContent.trim())) continue;
-    let card = leaf;
-    while (card && !/Disconnect/i.test(card.innerText ?? "")) card = card.parentElement;
-    if (!card) continue;
-    const lines = card.innerText.split("\n").map((s) => s.trim()).filter(Boolean);
-    const title = lines.find((l) => !/^(connected|disconnected|phone number|channel type|id:)/i.test(l) && !/^\d[\d,]* contacts$/i.test(l)) ?? "";
-    const phone = (card.innerText.match(/Phone Number:\s*(\d+)/) ?? [])[1] ?? "";
-    if (phone) cards.set(phone, { title, phone });
-  }
+  lines.forEach((line, i) => {
+    const m = line.match(/^Phone Number:\s*(\d+)/);
+    if (m && i > 0) cards.set(m[1], { title: lines[i - 1], phone: m[1] });
+  });
   return [...cards.values()];
 }
 
@@ -122,7 +121,10 @@ async function switchChannel(page, phone) {
     await page.keyboard.press("Escape").catch(() => {});
     throw new Error(`could not switch to channel ${phone}`);
   }
-  await sleep(2000);
+  // LuluChat lands on /dashboard after a switch: go back to the inbox of the new channel.
+  await page.goto(INBOX_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.getByRole("tab", { name: /^Unread/ }).first().waitFor({ state: "visible", timeout: 30_000 });
+  await sleep(1500);
 }
 
 /**
@@ -134,7 +136,7 @@ export async function scrapeUnread(context, log = console.log) {
   try {
     await page.goto(INBOX_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
     if (!page.url().includes("/inbox")) throw new SessionExpiredError(`redirected to ${page.url()}`);
-    await page.getByRole("button", { name: /^Channels/ }).first().waitFor({ state: "visible", timeout: 30_000 }).catch(() => {
+    await page.getByRole("tab", { name: /^Unread/ }).first().waitFor({ state: "visible", timeout: 30_000 }).catch(() => {
       throw new SessionExpiredError("inbox did not load");
     });
 
@@ -149,7 +151,7 @@ export async function scrapeUnread(context, log = console.log) {
     for (const ch of channels) {
       await switchChannel(page, ch.phone);
       await openUnreadTab(page);
-      const rows = await collectUnreadRows(page);
+      const rows = await collectUnreadRows(page, log);
       log(`  ${ch.title}: ${rows.length} unread chat(s)`);
       results.push({ ...ch, rows });
     }

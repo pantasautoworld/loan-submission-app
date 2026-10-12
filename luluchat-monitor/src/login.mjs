@@ -10,7 +10,7 @@ import { chromium } from "playwright";
 const dir = new URL("../.auth/", import.meta.url);
 await mkdir(dir, { recursive: true });
 
-const browser = await chromium.launch({ headless: false });
+const browser = await chromium.launch({ headless: false, channel: "chrome" }); // your normal Google Chrome
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const page = await context.newPage();
 await page.goto("https://app.luluchat.io/inbox/list");

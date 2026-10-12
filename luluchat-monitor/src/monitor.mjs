@@ -60,6 +60,8 @@ function inWorkingHours(now = new Date()) {
   return mins >= 8 * 60 + 55 && mins <= 18 * 60 + 15; // cron fires at 9:00 ... 18:00
 }
 
+const HARD_LIMIT_MS = 9 * 60_000; // never let one run block the next hourly run
+
 async function main() {
   if (!FORCE && !DRY && !inWorkingHours()) {
     console.log("outside 9am-6pm Malaysia time, skipping");
@@ -70,13 +72,20 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({ storageState: await loadStorageState(), viewport: { width: 1280, height: 900 } });
-    const channels = await scrapeUnread(context);
-    const { text } = buildReport({ channels, roster });
-    await sendTelegram(text);
+    const { results, finish } = await scrapeUnread(context);
+    const { text } = buildReport({ channels: results, roster });
+    await sendTelegram(text); // send first; switching the account back to its original channel is only tidy-up
+    await finish();
   } finally {
     await browser.close().catch(() => {});
   }
 }
+
+setTimeout(async () => {
+  console.error("hard time limit reached, aborting");
+  await sendTelegram("⚠️ LuluChat monitor: check took too long and was stopped").catch(() => {});
+  process.exit(0);
+}, HARD_LIMIT_MS).unref();
 
 main().catch(async (err) => {
   console.error(err);

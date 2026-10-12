@@ -127,12 +127,28 @@ async function switchChannel(page, phone) {
   await sleep(1500);
 }
 
+/** Rejects if `promise` takes longer than `ms` (so one stuck page step can never hang the whole run). */
+const withTimeout = (promise, ms, what) =>
+  Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms))]);
+
 /**
- * @returns [{ title, phone, rows: [{ name, time, assignee, preview }] }] - one entry per channel,
- *          rows = every chat in that channel's Unread tab.
+ * @returns { results, finish }
+ *   results = [{ title, phone, rows: [{ name, time, assignee, preview }] }] - one per channel, rows = every chat in its Unread tab.
+ *   finish() = best-effort tidy-up (switch the account back to the channel it started on, close the page).
+ *   Call it AFTER sending the report so a slow tidy-up can never delay or block the message.
  */
 export async function scrapeUnread(context, log = console.log) {
   const page = await context.newPage();
+  let originalPhone = "";
+  const finish = async () => {
+    try {
+      if (originalPhone) await withTimeout(switchChannel(page, originalPhone), 60_000, "switching back to the original channel");
+    } catch (err) {
+      log(`(could not switch back to the original channel: ${err.message})`);
+    } finally {
+      await page.close().catch(() => {});
+    }
+  };
   try {
     await page.goto(INBOX_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
     if (!page.url().includes("/inbox")) throw new SessionExpiredError(`redirected to ${page.url()}`);
@@ -140,7 +156,7 @@ export async function scrapeUnread(context, log = console.log) {
       throw new SessionExpiredError("inbox did not load");
     });
 
-    const originalPhone = await currentPhone(page);
+    originalPhone = await currentPhone(page);
     await openChannelModal(page);
     const channels = await page.evaluate(extractChannelCards);
     await closeChannelModal(page);
@@ -149,16 +165,15 @@ export async function scrapeUnread(context, log = console.log) {
 
     const results = [];
     for (const ch of channels) {
-      await switchChannel(page, ch.phone);
-      await openUnreadTab(page);
-      const rows = await collectUnreadRows(page, log);
+      await withTimeout(switchChannel(page, ch.phone), 90_000, `switching to ${ch.title}`);
+      await withTimeout(openUnreadTab(page), 60_000, `opening the Unread tab for ${ch.title}`);
+      const rows = await withTimeout(collectUnreadRows(page, log), 150_000, `reading ${ch.title}`);
       log(`  ${ch.title}: ${rows.length} unread chat(s)`);
       results.push({ ...ch, rows });
     }
-    // leave the account on the channel it started on
-    if (originalPhone) await switchChannel(page, originalPhone).catch(() => {});
-    return results;
-  } finally {
-    await page.close().catch(() => {});
+    return { results, finish };
+  } catch (err) {
+    await finish();
+    throw err;
   }
 }

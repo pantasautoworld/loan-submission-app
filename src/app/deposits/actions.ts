@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import {
   DEPOSIT_METHODS,
+  forfeitCarDeposit,
   recordDepositPayment,
   removeDepositPayment,
   resolveDepositPaymentAndNotify,
   setSigningDate as saveSigningDate,
+  undoForfeitPayment,
   type DepositMethod,
 } from "@/lib/depositPayments";
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
@@ -104,6 +106,26 @@ export async function deleteDepositPayment(paymentId: string) {
   const { profile } = await requireAdmin();
   await removeDepositPayment(paymentId, profile.full_name || "Admin");
   revalidatePath("/deposits");
+}
+
+/** Admin-only: the buyer backed out and we keep the whole deposit for this car. */
+export async function forfeitDeposit(carDepositId: string, reason: string) {
+  const { profile } = await requireAdmin();
+  const cleanReason = reason.trim();
+  if (!cleanReason) throw new Error("Enter a reason for forfeiting the deposit.");
+
+  const { payments } = await forfeitCarDeposit(carDepositId, cleanReason, profile.full_name || "Admin");
+  if (payments.length === 0) throw new Error("There is no approved deposit on this car to forfeit.");
+  revalidatePath("/deposits");
+  revalidatePath("/stock-board");
+}
+
+/** Admin-only: put a wrongly-forfeited payment back to Approved. */
+export async function undoForfeit(paymentId: string) {
+  const { profile } = await requireAdmin();
+  await undoForfeitPayment(paymentId, profile.full_name || "Admin");
+  revalidatePath("/deposits");
+  revalidatePath("/stock-board");
 }
 
 export async function updateSigningDate(carDepositId: string, signingDate: string) {

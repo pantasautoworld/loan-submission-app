@@ -11,7 +11,9 @@ import { malaysiaDateParts } from "@/lib/timezone";
 import {
   approveDepositPayment,
   deleteDepositPayment,
+  forfeitDeposit,
   rejectDepositPayment,
+  undoForfeit,
   updateSigningDate,
 } from "@/app/deposits/actions";
 import { AddPaymentModal } from "./AddPaymentModal";
@@ -45,11 +47,13 @@ const STATUS_STYLE: Record<string, string> = {
   pending: "border-line text-muted",
   approved: "border-success text-success",
   rejected: "border-danger text-danger",
+  forfeited: "border-amber text-amber",
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
   approved: "Approved",
   rejected: "Rejected",
+  forfeited: "Forfeited",
 };
 
 function SigningDateInput({ deposit }: { deposit: DepositWithUrls }) {
@@ -95,6 +99,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
   const [addingDeposit, setAddingDeposit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [forfeitingId, setForfeitingId] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryMonth, setSummaryMonth] = useState(monthOptions[0].value);
   const [search, setSearch] = useState("");
@@ -123,6 +128,37 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
       await (decision === "approved" ? approveDepositPayment : rejectDepositPayment)(payment.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not update - try again.");
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
+  async function handleForfeit(deposit: DepositWithUrls, amount: number) {
+    const reason = window.prompt(
+      `Forfeit the whole ${fmtMoney(amount)} deposit for ${deposit.no_plate}? The company keeps the money and the car's deposit goes back to RM0.\n\nReason (required):`
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      alert("A reason is required to forfeit a deposit.");
+      return;
+    }
+    setForfeitingId(deposit.id);
+    try {
+      await forfeitDeposit(deposit.id, reason);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not forfeit - try again.");
+    } finally {
+      setForfeitingId(null);
+    }
+  }
+
+  async function handleUndoForfeit(payment: PaymentWithUrl) {
+    if (!confirm(`Undo the forfeit of this ${fmtMoney(payment.amount)} payment? It will count as an approved deposit again.`)) return;
+    setResolvingId(payment.id);
+    try {
+      await undoForfeit(payment.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not undo - try again.");
     } finally {
       setResolvingId(null);
     }
@@ -192,7 +228,7 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
             </div>
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
             <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
               <div className="font-display text-xl font-bold text-fg">{fmtMoney(monthlySummary.total)}</div>
               <div className="text-[11px] uppercase tracking-wide text-muted">Collected</div>
@@ -208,6 +244,10 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
             <div className="rounded-[7px] border border-line bg-panel-raised px-3 py-2.5">
               <div className="font-display text-xl font-bold text-fg">{monthlySummary.pendingCount}</div>
               <div className="text-[11px] uppercase tracking-wide text-muted">Still pending</div>
+            </div>
+            <div className="rounded-[7px] border border-amber/60 bg-panel-raised px-3 py-2.5">
+              <div className="font-display text-xl font-bold text-amber">{fmtMoney(monthlySummary.forfeitedTotal)}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted">Forfeited (kept)</div>
             </div>
           </div>
 
@@ -240,10 +280,35 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                     <span className="ml-2">
                       {r.method || "—"} · {fmtDate(r.paymentDate)} · Submitted by {r.uploadedBy}
                       {r.approvedBy ? ` · Approved by ${r.approvedBy}` : ""}
+                      {r.forfeited ? " · later forfeited" : ""}
                     </span>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {monthlySummary.forfeitedRows.length > 0 && (
+            <div className="mt-4 border-t border-line pt-3">
+              <h4 className="mb-1 text-sm font-semibold text-amber">
+                Forfeited deposits (kept) · {fmtMoney(monthlySummary.forfeitedTotal)}
+              </h4>
+              <div className="divide-y divide-line">
+                {monthlySummary.forfeitedRows.map((r) => (
+                  <div key={r.paymentId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <div>
+                      <span className="font-mono font-semibold text-fg">{r.plate}</span>
+                      <span className="ml-2 text-muted">{r.vehicle}</span>
+                    </div>
+                    <div className="text-right text-xs text-muted">
+                      <span className="font-mono text-sm font-semibold text-fg">{fmtMoney(r.amount)}</span>
+                      <span className="ml-2">
+                        {fmtDate(r.forfeitedAt)} · {r.reason || "no reason"} · By {r.forfeitedBy}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -263,6 +328,9 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
             const collected = payments
               .filter((p) => p.status === "approved")
               .reduce((sum, p) => sum + p.amount, 0);
+            const forfeited = payments
+              .filter((p) => p.status === "forfeited")
+              .reduce((sum, p) => sum + p.amount, 0);
 
             return (
               <div key={car.id} className="rounded-[10px] border border-line bg-panel p-5">
@@ -275,13 +343,27 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                     <div className="text-sm text-muted">
                       Collected {fmtMoney(collected)} of {fmtMoney(car.deposit)} required
                     </div>
+                    {forfeited > 0 && (
+                      <div className="text-xs font-semibold text-amber">{fmtMoney(forfeited)} forfeited (kept)</div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => setModalCar(car)}
-                    className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
-                  >
-                    + Add payment
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {role === "admin" && deposit && collected > 0 && (
+                      <button
+                        onClick={() => handleForfeit(deposit, collected)}
+                        disabled={forfeitingId === deposit.id}
+                        className="rounded-[7px] border border-amber px-3 py-2 text-sm font-semibold text-amber hover:bg-amber/10 disabled:opacity-50"
+                      >
+                        {forfeitingId === deposit.id ? "Forfeiting…" : "Forfeit deposit"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setModalCar(car)}
+                      className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
+                    >
+                      + Add payment
+                    </button>
+                  </div>
                 </div>
 
                 {payments.length > 0 && (
@@ -298,10 +380,16 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                           {p.note && <span className="ml-2 text-muted italic">{p.note}</span>}
                           <div className="text-[11px] text-muted">
                             By {p.uploaded_by_name}
-                            {p.status !== "pending" && p.approved_by_name
+                            {p.status !== "pending" && p.status !== "forfeited" && p.approved_by_name
                               ? ` · ${STATUS_LABEL[p.status]} by ${p.approved_by_name}`
                               : ""}
                           </div>
+                          {p.status === "forfeited" && (
+                            <div className="text-[11px] text-amber">
+                              Forfeited {fmtDate(p.forfeited_at)} by {p.forfeited_by_name || "Admin"}
+                              {p.forfeit_reason ? ` · ${p.forfeit_reason}` : ""}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {p.receiptUrl && (
@@ -336,6 +424,15 @@ export function DepositPaymentApp({ role, vehicles, deposits }: Props) {
                                 {resolvingId === p.id ? "…" : "Reject"}
                               </button>
                             </>
+                          )}
+                          {role === "admin" && p.status === "forfeited" && (
+                            <button
+                              onClick={() => handleUndoForfeit(p)}
+                              disabled={resolvingId === p.id}
+                              className="text-xs text-muted hover:text-fg hover:underline disabled:opacity-50"
+                            >
+                              {resolvingId === p.id ? "…" : "Undo forfeit"}
+                            </button>
                           )}
                           {role === "admin" && (
                             <button

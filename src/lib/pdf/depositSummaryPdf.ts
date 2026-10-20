@@ -75,6 +75,7 @@ export async function buildDepositSummaryPdf(
     ["Approved payments", String(summary.rows.length)],
     ["Cars", String(summary.carCount)],
     ["Still pending", String(summary.pendingCount)],
+    ["Forfeited (kept)", fmtMoney(summary.forfeitedTotal)],
   ];
   const statWidth = (PAGE_WIDTH - MARGIN * 2) / stats.length;
   stats.forEach(([label, value], i) => {
@@ -113,6 +114,35 @@ export async function buildDepositSummaryPdf(
       page.drawText(cell, { x: COLUMNS[i].x + 3, y, size: 8, font });
     });
     y -= ROW_HEIGHT;
+  }
+
+  // Deposits the company kept after a buyer backed out, listed by the month they were forfeited.
+  if (summary.forfeitedRows.length > 0) {
+    ensureSpace(ROW_HEIGHT * 3);
+    y -= 12;
+    page.drawText(`Forfeited deposits (kept) - ${fmtMoney(summary.forfeitedTotal)}`, {
+      x: MARGIN,
+      y,
+      size: 10,
+      font: bold,
+    });
+    y -= ROW_HEIGHT + 2;
+    for (const r of summary.forfeitedRows) {
+      ensureSpace(ROW_HEIGHT);
+      const cells = [
+        truncate(r.plate, 12),
+        truncate(r.vehicle, 26),
+        fmtMoney(r.amount),
+        fmtDate(r.forfeitedAt),
+        truncate(r.reason || "-", 40),
+        truncate(r.forfeitedBy || "-", 18),
+      ];
+      const xs = [MARGIN, MARGIN + 60, MARGIN + 175, MARGIN + 230, MARGIN + 290, MARGIN + 450];
+      cells.forEach((cell, i) => {
+        page.drawText(cell, { x: xs[i] + 3, y, size: 8, font });
+      });
+      y -= ROW_HEIGHT;
+    }
   }
 
   const bytes = await pdf.save();

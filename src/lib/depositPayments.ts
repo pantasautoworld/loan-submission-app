@@ -22,7 +22,8 @@ export interface DepositPaymentRow {
   method: DepositMethod | "";
   receipt_number: string;
   receipt_path: string | null;
-  status: "pending" | "approved" | "rejected";
+  /** "forfeited" = the buyer backed out and the company kept this (previously approved) payment. */
+  status: "pending" | "approved" | "rejected" | "forfeited";
   uploaded_by: string | null;
   uploaded_by_name: string;
   source: "app" | "telegram";
@@ -31,6 +32,9 @@ export interface DepositPaymentRow {
   payment_date: string;
   approved_by_name: string | null;
   approved_at: string | null;
+  forfeited_at: string | null;
+  forfeited_by_name: string | null;
+  forfeit_reason: string | null;
   telegram_messages: { chat_id: string; message_id: number; has_photo: boolean }[];
 }
 
@@ -56,10 +60,25 @@ export interface MonthlyDepositSummaryRow {
   uploadedBy: string;
   paymentDate: string;
   approvedBy: string | null;
+  /** True when this payment was later forfeited - still counted as collected in the month the money arrived. */
+  forfeited: boolean;
+}
+
+export interface ForfeitedDepositSummaryRow {
+  paymentId: string;
+  plate: string;
+  vehicle: string;
+  amount: number;
+  reason: string;
+  forfeitedBy: string;
+  forfeitedAt: string;
 }
 
 export interface MonthlyDepositSummary {
   rows: MonthlyDepositSummaryRow[];
+  /** Deposits the company kept this month, bucketed by the day they were forfeited (not when they were paid). */
+  forfeitedRows: ForfeitedDepositSummaryRow[];
+  forfeitedTotal: number;
   total: number;
   carCount: number;
   pendingCount: number;
@@ -69,7 +88,10 @@ export interface MonthlyDepositSummary {
 /**
  * Approved payments that landed in the given "YYYY-MM" month (bucketed by
  * payment_date, the staff-entered date money actually changed hands, not
- * necessarily the same day it was uploaded/approved) - shared by the
+ * necessarily the same day it was uploaded/approved). Payments that were
+ * later forfeited still count here as collected - the money did arrive that
+ * month - and are also listed in `forfeitedRows` for the month they were
+ * forfeited. Shared by the
  * on-page Monthly summary panel and the downloadable PDF so the two can
  * never drift apart. Still-pending payments from the same month are only
  * counted, not listed.
@@ -79,13 +101,25 @@ export function summarizeApprovedDepositsForMonth(
   month: string
 ): MonthlyDepositSummary {
   const rows: MonthlyDepositSummaryRow[] = [];
+  const forfeitedRows: ForfeitedDepositSummaryRow[] = [];
   let pendingCount = 0;
 
   for (const d of deposits) {
     for (const p of d.payments) {
+      if (p.status === "forfeited" && p.forfeited_at && malaysiaYearMonth(new Date(p.forfeited_at)) === month) {
+        forfeitedRows.push({
+          paymentId: p.id,
+          plate: d.no_plate,
+          vehicle: d.vehicle,
+          amount: p.amount,
+          reason: p.forfeit_reason ?? "",
+          forfeitedBy: p.forfeited_by_name ?? "",
+          forfeitedAt: p.forfeited_at,
+        });
+      }
       const dateKey = p.payment_date ?? p.uploaded_at;
       if (!dateKey || malaysiaYearMonth(new Date(dateKey)) !== month) continue;
-      if (p.status === "approved") {
+      if (p.status === "approved" || p.status === "forfeited") {
         rows.push({
           paymentId: p.id,
           plate: d.no_plate,
@@ -95,6 +129,7 @@ export function summarizeApprovedDepositsForMonth(
           uploadedBy: p.uploaded_by_name,
           paymentDate: dateKey,
           approvedBy: p.approved_by_name,
+          forfeited: p.status === "forfeited",
         });
       } else if (p.status === "pending") {
         pendingCount += 1;
@@ -102,6 +137,7 @@ export function summarizeApprovedDepositsForMonth(
     }
   }
   rows.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+  forfeitedRows.sort((a, b) => b.forfeitedAt.localeCompare(a.forfeitedAt));
 
   const byMethod = new Map<string, number>();
   for (const r of rows) {
@@ -111,6 +147,8 @@ export function summarizeApprovedDepositsForMonth(
 
   return {
     rows,
+    forfeitedRows,
+    forfeitedTotal: forfeitedRows.reduce((sum, r) => sum + r.amount, 0),
     total: rows.reduce((sum, r) => sum + r.amount, 0),
     carCount: new Set(rows.map((r) => r.plate)).size,
     pendingCount,
@@ -173,6 +211,22 @@ export async function fetchApprovedDepositTotals(supabase: SupabaseClient): Prom
     .from("car_deposit_payments")
     .select("amount, car_deposits!inner(stock_board_vehicle_id)")
     .eq("status", "approved");
+  if (error) throw new Error(error.message);
+
+  const totals: Record<string, number> = {};
+  for (const row of (data ?? []) as unknown as { amount: number; car_deposits: { stock_board_vehicle_id: string } }[]) {
+    const vehicleId = row.car_deposits.stock_board_vehicle_id;
+    totals[vehicleId] = (totals[vehicleId] ?? 0) + Number(row.amount);
+  }
+  return totals;
+}
+
+/** Sum of forfeited payments per car - lets the Stock Board note "RM1,000 forfeited" on a car whose earlier buyer backed out. */
+export async function fetchForfeitedDepositTotals(supabase: SupabaseClient): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("car_deposit_payments")
+    .select("amount, car_deposits!inner(stock_board_vehicle_id)")
+    .eq("status", "forfeited");
   if (error) throw new Error(error.message);
 
   const totals: Record<string, number> = {};
@@ -430,6 +484,80 @@ export async function removeDepositPayment(paymentId: string, actorName: string)
     })}\n\n🗑 Deleted by ${actorName}`;
     await Promise.all(payment.telegram_messages.map((tm) => editDepositTelegramMessage(tm, caption)));
   }
+}
+
+function escapeTelegramHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * The buyer backed out and the company keeps the deposit: every *approved*
+ * payment on this car becomes "forfeited" (whole deposit - partial refunds
+ * aren't supported). Forfeited payments stop counting towards the car's
+ * approved total, so the next buyer starts from RM0 on the Stock Board, but
+ * they stay on record and show in the Monthly summary's forfeited section.
+ * The `.eq("status", "approved")` filter makes a double-click harmless.
+ * Returns the forfeited payments (empty = nothing approved to forfeit).
+ */
+export async function forfeitCarDeposit(
+  carDepositId: string,
+  reason: string,
+  actorName: string
+): Promise<{ payments: DepositPaymentRow[]; carDeposit: CarDepositRow }> {
+  const admin = createAdminClient();
+
+  const { data: carDeposit, error: carErr } = await admin
+    .from("car_deposits")
+    .select("*")
+    .eq("id", carDepositId)
+    .single();
+  if (carErr || !carDeposit) throw new Error(carErr?.message ?? "Deposit record not found");
+
+  const { data, error } = await admin
+    .from("car_deposit_payments")
+    .update({
+      status: "forfeited",
+      forfeited_at: new Date().toISOString(),
+      forfeited_by_name: actorName,
+      forfeit_reason: reason,
+    })
+    .eq("car_deposit_id", carDepositId)
+    .eq("status", "approved")
+    .select("*");
+  if (error) throw new Error(error.message);
+
+  const payments = (data ?? []) as DepositPaymentRow[];
+  if (payments.length === 0) return { payments, carDeposit: carDeposit as CarDepositRow };
+
+  const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  await notifyTelegram(
+    `⚠️ <b>Deposit forfeited</b>\n` +
+      `${carDeposit.vehicle} (${carDeposit.no_plate})\n` +
+      `Amount kept: RM${total.toLocaleString()}\n` +
+      `Reason: ${escapeTelegramHtml(reason)}\n` +
+      `By: ${escapeTelegramHtml(actorName)}`
+  );
+
+  return { payments, carDeposit: carDeposit as CarDepositRow };
+}
+
+/** Admin correction for a forfeit done by mistake: puts one payment back to "approved" (so it counts towards the car again). */
+export async function undoForfeitPayment(paymentId: string, actorName: string): Promise<void> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("car_deposit_payments")
+    .update({ status: "approved", forfeited_at: null, forfeited_by_name: null, forfeit_reason: null })
+    .eq("id", paymentId)
+    .eq("status", "forfeited")
+    .select("*, car_deposits(*)")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "This payment is not forfeited.");
+
+  const { car_deposits: carDeposit, ...payment } = data as DepositPaymentRow & { car_deposits: CarDepositRow };
+  await notifyTelegram(
+    `↩️ <b>Forfeit undone</b> by ${escapeTelegramHtml(actorName)}: RM${Number(payment.amount).toLocaleString()} for ` +
+      `${carDeposit.vehicle} (${carDeposit.no_plate}) is counted as a deposit again.`
+  );
 }
 
 export async function setSigningDate(carDepositId: string, signingDate: string): Promise<void> {

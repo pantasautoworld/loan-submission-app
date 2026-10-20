@@ -1,6 +1,6 @@
 import { requireSalesStaff } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
-import { fetchApprovedDepositTotals } from "@/lib/depositPayments";
+import { fetchApprovedDepositTotals, fetchForfeitedDepositTotals } from "@/lib/depositPayments";
 import { fetchLatestPuspakomStatusByVehicle } from "@/lib/puspakomBookings";
 import { fetchCarLocations, fetchPendingTaskCountsByVehicle } from "@/lib/recon";
 import { StockBoardApp } from "@/components/stockBoard/StockBoardApp";
@@ -8,10 +8,11 @@ import { StockBoardApp } from "@/components/stockBoard/StockBoardApp";
 export default async function StockBoardPage() {
   const { profile, supabase } = await requireSalesStaff();
 
-  const [{ data: staff }, depositTotals, puspakomStatusByVehicle, carLocations, pendingTaskCounts] =
+  const [{ data: staff }, depositTotals, forfeitedTotals, puspakomStatusByVehicle, carLocations, pendingTaskCounts] =
     await Promise.all([
       supabase.from("profiles").select("full_name").eq("is_active", true).order("full_name"),
       fetchApprovedDepositTotals(supabase),
+      fetchForfeitedDepositTotals(supabase),
       fetchLatestPuspakomStatusByVehicle(supabase),
       fetchCarLocations(supabase),
       fetchPendingTaskCountsByVehicle(supabase),
@@ -27,6 +28,7 @@ export default async function StockBoardPage() {
         role={profile.role}
         staffNames={staffNames}
         depositTotals={depositTotals}
+        forfeitedTotals={forfeitedTotals}
         puspakomStatusByVehicle={puspakomStatusByVehicle}
         locationByVehicle={locationByVehicle}
         pendingTaskCounts={pendingTaskCounts}

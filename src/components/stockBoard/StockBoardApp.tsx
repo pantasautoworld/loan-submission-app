@@ -32,6 +32,8 @@ interface Props {
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
   depositTotals: Record<string, number>;
+  /** Sum of forfeited deposit payments per car (an earlier buyer backed out and we kept the money), keyed by Stock Board vehicle id. */
+  forfeitedTotals: Record<string, number>;
   /** Each car's most recent Puspakom booking (B5 and B7 are done together, so one status per car), keyed by Stock Board vehicle id. */
   puspakomStatusByVehicle: Record<string, PuspakomStatusInfo>;
   /** Current recon Location per car, keyed by Stock Board vehicle id. */
@@ -92,6 +94,7 @@ export function StockBoardApp({
   role,
   staffNames,
   depositTotals,
+  forfeitedTotals,
   puspakomStatusByVehicle,
   locationByVehicle,
   pendingTaskCounts,
@@ -487,6 +490,14 @@ export function StockBoardApp({
                         }`}
                       >
                         RM{depositCollected.toLocaleString()} of RM{depositRequired.toLocaleString()}
+                      </span>
+                    )}
+                    {(forfeitedTotals[v.id] ?? 0) > 0 && (
+                      <span
+                        title="An earlier buyer backed out and the deposit was kept"
+                        className="rounded-full border border-amber px-2.5 py-0.5 text-[11px] font-semibold text-amber"
+                      >
+                        RM{forfeitedTotals[v.id].toLocaleString()} forfeited
                       </span>
                     )}
                     {v.supplier && (

@@ -134,6 +134,36 @@ function addPaymentRows(sheet: ExcelJS.Worksheet, extra: number) {
   for (let r = TAIL_FIRST_ROW + extra; r <= TAIL_LAST_ROW + extra; r++) sheet.mergeCells(`D${r}:E${r}`);
 }
 
+/**
+ * Car / customer boxes keep the template's font size: long text (a long name, e-mail or car
+ * description) wraps onto a second line and the row grows to fit, instead of shrinking the font.
+ */
+function wrapHeaderCells(sheet: ExcelJS.Worksheet) {
+  const boxes: [address: string, fromCol: string, toCol: string][] = [
+    ["D3", "D", "E"],
+    ["D4", "D", "E"],
+    ["D5", "D", "E"],
+    ["J3", "J", "K"],
+    ["J4", "J", "K"],
+    ["J5", "J", "K"],
+  ];
+  const linesByRow = new Map<number, number>();
+  for (const [address, fromCol, toCol] of boxes) {
+    const cell = sheet.getCell(address);
+    const text = String(cell.value ?? "");
+    cell.alignment = { ...cell.alignment, wrapText: true };
+    const units = (sheet.getColumn(fromCol).width ?? 8.43) + (sheet.getColumn(toCol).width ?? 8.43);
+    const usablePx = units * 7 - 5; // about 7px per width unit, less the cell's indent
+    const pxPerChar = text === text.toUpperCase() ? 7.4 : 6.0; // Arial 10: capitals are wider
+    const lines = Math.max(1, Math.ceil((text.length * pxPerChar) / usablePx));
+    const row = Number(address.slice(1));
+    linesByRow.set(row, Math.max(linesByRow.get(row) ?? 1, lines));
+  }
+  for (const [row, lines] of linesByRow) {
+    if (lines > 1) sheet.getRow(row).height = lines * 12.75 + 2.25;
+  }
+}
+
 /** Fills the template and returns the .xlsx bytes. */
 export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): Promise<Buffer> {
   // templates/ is copied into the deploy image explicitly (see Dockerfile), so the file tracer
@@ -170,11 +200,7 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
   sheet.getCell("J3").value = input.customerName || null;
   sheet.getCell("J4").value = input.email || null;
   sheet.getCell("J5").value = input.phone || null;
-  // Long names / car descriptions / e-mails shrink to fit their cell instead of being cut off.
-  for (const address of ["J1", "D3", "D4", "J3", "J4", "J5"]) {
-    const cell = sheet.getCell(address);
-    cell.alignment = { ...cell.alignment, shrinkToFit: true };
-  }
+  wrapHeaderCells(sheet);
 
   // --- 8. Pricing details (internal)
   const retention = input.retention ?? 0;

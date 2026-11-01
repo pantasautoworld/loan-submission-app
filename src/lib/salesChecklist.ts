@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClaimInvoiceRow } from "@/lib/claimInvoices";
 import { fetchCarDeposits } from "@/lib/depositPayments";
+import { formatNric } from "@/lib/hpAutofill";
 import { parseSigningNote } from "@/lib/signingNotes";
 import { fetchStockBoardVehicles, findByPlate } from "@/lib/stockBoard";
 
@@ -44,7 +45,8 @@ export interface SalesChecklistInput {
   company: string;
   term: "Loan" | "Cash";
   customerName: string;
-  email: string;
+  /** Hirer's IC / NRIC from the loan submission, e.g. 961122-04-5489 */
+  nric: string;
   phone: string;
   loanApproved: number;
   /** From the Stock Board loan note, null when not found */
@@ -198,7 +200,8 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
   sheet.getCell("D5").value = checklistCompany(input.company) || null;
   sheet.getCell("D6").value = checklistPaymentBy(input.term);
   sheet.getCell("J3").value = input.customerName || null;
-  sheet.getCell("J4").value = input.email || null;
+  sheet.getCell("H4").value = "IC / NRIC"; // the template's e-mail box is used for the customer's IC instead
+  sheet.getCell("J4").value = input.nric || null;
   sheet.getCell("J5").value = input.phone || null;
   wrapHeaderCells(sheet);
 
@@ -263,28 +266,28 @@ const normalizePlate = (s: string) => s.replace(/\s+/g, "").toUpperCase();
 interface HirerRow {
   name: string | null;
   phone: string | null;
-  email: string | null;
+  nric: string | null;
   created_at: string;
   submissions: { no_plate: string | null } | { no_plate: string | null }[] | null;
 }
 
 /**
- * The buyer's phone and e-mail come from the loan submission whose hirer has the same name as the
- * invoice's buyer. A submission for the same plate wins; otherwise the newest one - and each field
- * falls back to an older submission when the best match left it empty.
+ * The buyer's phone and IC / NRIC come from the loan submission whose hirer has the same name as
+ * the invoice's buyer. A submission for the same plate wins; otherwise the newest one - and each
+ * field falls back to an older submission when the best match left it empty.
  */
 async function findHirerContact(
   supabase: SupabaseClient,
   buyerName: string,
   plate: string
-): Promise<{ phone: string; email: string }> {
+): Promise<{ phone: string; nric: string }> {
   const wanted = normalizeName(buyerName);
   const firstWord = wanted.split(" ")[0];
-  if (!firstWord) return { phone: "", email: "" };
+  if (!firstWord) return { phone: "", nric: "" };
 
   const { data } = await supabase
     .from("persons")
-    .select("name, phone, email, created_at, submissions(no_plate)")
+    .select("name, phone, nric, created_at, submissions(no_plate)")
     .eq("role", "hirer")
     .ilike("name", `%${firstWord.replace(/[\\%_]/g, "\\$&")}%`)
     .limit(500);
@@ -300,7 +303,7 @@ async function findHirerContact(
 
   return {
     phone: matches.map((m) => (m.row.phone ?? "").trim()).find(Boolean) ?? "",
-    email: matches.map((m) => (m.row.email ?? "").trim()).find(Boolean) ?? "",
+    nric: formatNric(matches.map((m) => (m.row.nric ?? "").trim()).find(Boolean) ?? ""),
   };
 }
 
@@ -343,7 +346,7 @@ export async function fetchSalesChecklistInput(
     company: car?.company ?? "",
     term: invoice.term,
     customerName: invoice.buyer_name,
-    email: contact.email,
+    nric: contact.nric,
     phone: contact.phone,
     loanApproved: Number(invoice.loan_amount) || 0,
     retention,

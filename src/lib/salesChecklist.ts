@@ -51,6 +51,8 @@ export interface SalesChecklistInput {
   retention: number | null;
   /** Total of the approved deposit payments */
   deposit: number;
+  /** The car's Deposit Required on the Stock Board, null when not set. Paid above this is the staff's mark-up. */
+  depositRequired: number | null;
   /** Selling price on the claim invoice - the customer-side car price */
   sellingPrice: number;
   /** Original Price (Website): Stock Board Price - RM3,000 + the car's Deposit Required; null when the car has no price */
@@ -190,6 +192,16 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
     result: input.originalPrice === null ? "" : actualPrice - input.originalPrice,
   };
 
+  // Staff marked up: whatever the customer paid above the car's Deposit Required (e.g. required
+  // 1,000, paid 1,300 -> 300), split 30% staff / 70% company. Left blank when no requirement is set.
+  if (input.depositRequired !== null) {
+    const markUp = Math.max(0, input.deposit - input.depositRequired);
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    sheet.getCell("D24").value = markUp;
+    sheet.getCell("D25").value = { formula: "D24*0.3", result: cents(markUp * 0.3) };
+    sheet.getCell("D26").value = { formula: "D24*0.7", result: cents(markUp * 0.7) };
+  }
+
   // --- 9. Pricing details (customer)
   sheet.getCell("J9").value = input.sellingPrice;
   sheet.getCell("J13").value = { formula: "SUM(J9:J12)", result: input.sellingPrice };
@@ -310,6 +322,7 @@ export async function fetchSalesChecklistInput(
     loanApproved: Number(invoice.loan_amount) || 0,
     retention,
     deposit: payments.reduce((sum, p) => sum + p.amount, 0),
+    depositRequired: asNumber(car?.deposit),
     sellingPrice: Number(invoice.selling_price) || 0,
     originalPrice,
     signingDate: invoice.invoice_date,

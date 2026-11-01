@@ -55,8 +55,10 @@ export interface SalesChecklistInput {
   deposit: number;
   /** The car's Deposit Required on the Stock Board, null when not set. Paid above this is the staff's mark-up. */
   depositRequired: number | null;
-  /** Selling price on the claim invoice - the customer-side car price */
+  /** Selling price on the claim invoice (the customer-side car price is this + the deposit paid) */
   sellingPrice: number;
+  /** Deposit Amount on the claim invoice - shown as the customer-side discount */
+  invoiceDeposit: number;
   /** Original Price (Website): Stock Board Price - RM3,000 + the car's Deposit Required; null when the car has no price */
   originalPrice: number | null;
   /** Invoice date, YYYY-MM-DD */
@@ -232,9 +234,13 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
   }
 
   // --- 9. Pricing details (customer)
-  sheet.getCell("J9").value = input.sellingPrice;
-  sheet.getCell("J13").value = { formula: "SUM(J9:J12)", result: input.sellingPrice };
-  sheet.getCell("J15").value = { formula: "J13-J14", result: input.sellingPrice };
+  // Car price = invoice selling price + the deposit actually paid; the invoice's Deposit Amount comes
+  // off as the discount, so FINAL PRICE OTR ends up as loan + deposit paid (same as the internal side).
+  const carPrice = input.sellingPrice + input.deposit;
+  sheet.getCell("J9").value = carPrice;
+  sheet.getCell("J14").value = input.invoiceDeposit;
+  sheet.getCell("J13").value = { formula: "SUM(J9:J12)", result: carPrice };
+  sheet.getCell("J15").value = { formula: "J13-J14", result: carPrice - input.invoiceDeposit };
   const signing = dateCell(input.signingDate);
   sheet.getCell("J18").value = signing;
   if (signing) sheet.getCell("J18").numFmt = DATE_FORMAT;
@@ -353,6 +359,7 @@ export async function fetchSalesChecklistInput(
     deposit: payments.reduce((sum, p) => sum + p.amount, 0),
     depositRequired: asNumber(car?.deposit),
     sellingPrice: Number(invoice.selling_price) || 0,
+    invoiceDeposit: Number(invoice.deposit_amount) || 0,
     originalPrice,
     signingDate: invoice.invoice_date,
     payments,

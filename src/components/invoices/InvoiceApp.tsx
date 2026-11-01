@@ -87,6 +87,12 @@ export function InvoiceApp({ role, invoices }: Props) {
                       >
                         Download PDF
                       </a>
+                      <a
+                        href={`/api/invoices/${inv.id}/checklist`}
+                        className="text-xs text-amber hover:underline"
+                      >
+                        Download Checklist
+                      </a>
                       {role === "admin" && (
                         <button
                           onClick={() => handleDelete(inv)}

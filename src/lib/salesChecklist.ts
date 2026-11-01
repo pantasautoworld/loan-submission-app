@@ -25,6 +25,9 @@ const PRINT_ROWS_BELOW_TAIL = 13;
 
 const PAYMENT_METHOD_LIST = '"Cash,Transfer,DuitNow,Credit Card"';
 
+/** The Stock Board price runs this much above the website price, before the car's deposit is added back. */
+const WEBSITE_PRICE_LESS = 3000;
+
 export interface ChecklistPayment {
   /** YYYY-MM-DD */
   date: string;
@@ -50,7 +53,7 @@ export interface SalesChecklistInput {
   deposit: number;
   /** Selling price on the claim invoice - the customer-side car price */
   sellingPrice: number;
-  /** Stock Board "Price" - the original price on the checklist */
+  /** Original Price (Website): Stock Board Price - RM3,000 + the car's Deposit Required; null when the car has no price */
   originalPrice: number | null;
   /** Invoice date, YYYY-MM-DD */
   signingDate: string;
@@ -292,6 +295,8 @@ export async function fetchSalesChecklistInput(
 
   const contact = await findHirerContact(supabase, invoice.buyer_name, invoice.vehicle_no);
   const retention = asNumber(parseSigningNote(car?.notes, invoice.vehicle_no).retention);
+  const stockPrice = asNumber(car?.price);
+  const originalPrice = stockPrice === null ? null : stockPrice - WEBSITE_PRICE_LESS + (asNumber(car?.deposit) ?? 0);
 
   return {
     staffPic: car?.submittedBy || invoice.created_by_name || invoice.agent_name,
@@ -306,7 +311,7 @@ export async function fetchSalesChecklistInput(
     retention,
     deposit: payments.reduce((sum, p) => sum + p.amount, 0),
     sellingPrice: Number(invoice.selling_price) || 0,
-    originalPrice: asNumber(car?.price),
+    originalPrice,
     signingDate: invoice.invoice_date,
     payments,
   };

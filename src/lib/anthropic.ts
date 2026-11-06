@@ -289,3 +289,34 @@ export async function detectPlateBoxes(
   }
   return boxes;
 }
+
+export interface PlatePoint {
+  x: number;
+  y: number;
+}
+
+/** Four corners of a plate as it appears in the photo, ordered top-left, top-right, bottom-right, bottom-left. */
+export type PlateQuad = [PlatePoint, PlatePoint, PlatePoint, PlatePoint];
+
+/** Close-up read of a plate: exact corners, so an angled plate is covered without also covering the paint around it. */
+export async function detectPlateCorners(
+  jpeg: Buffer,
+  width: number,
+  height: number
+): Promise<PlateQuad[]> {
+  const result = await extractJson<{ plates?: { corners?: Partial<PlatePoint>[] }[] }>(
+    { kind: "image", mediaType: "image/jpeg", base64: jpeg.toString("base64") },
+    `This is a close-up crop of a car, ${width} pixels wide and ${height} pixels tall, with a vehicle number plate (licence plate) in it. For every number plate in the crop, return the exact pixel position of the four corners of the plate's outer edge (the edge of the metal/plastic plate itself, not the bumper, the plate holder or the paintwork around it). The car is often photographed at an angle, so the plate is usually a skewed four-sided shape, not an upright rectangle - give each corner where it really is. List the corners in this order: top-left, top-right, bottom-right, bottom-left, as they appear in the image (0,0 is the top-left of the image). If there is no plate, return an empty list. Return {"plates": [{"corners": [{"x": number, "y": number}, {"x": number, "y": number}, {"x": number, "y": number}, {"x": number, "y": number}]}]}.`,
+    PLATE_MODEL
+  );
+
+  const quads: PlateQuad[] = [];
+  for (const plate of result.plates ?? []) {
+    const corners = plate.corners;
+    if (!corners || corners.length !== 4) continue;
+    if (corners.some((c) => typeof c.x !== "number" || typeof c.y !== "number")) continue;
+    if (corners.some((c) => !Number.isFinite(c.x) || !Number.isFinite(c.y))) continue;
+    quads.push(corners.map((c) => ({ x: c.x!, y: c.y! })) as PlateQuad);
+  }
+  return quads;
+}

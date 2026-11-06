@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
-import { detectPlateBoxes, type PlateBox } from "@/lib/anthropic";
+import { detectPlateBoxes, detectPlateCorners, type PlateBox, type PlatePoint } from "@/lib/anthropic";
 
 // Photos are normalised to this long edge before detection, so the model's pixel
 // coordinates line up exactly with the image that gets blacked out and printed.
@@ -10,16 +10,19 @@ const JPEG_QUALITY = 88;
 const DETECTION_PASSES = 2;
 // A plate is never a big part of the frame; anything larger is the model boxing the wrong thing.
 const MAX_BOX_AREA_RATIO = 0.3;
-// Second look: each plate is cropped out with this much room around it and measured again at
-// high zoom, which gives a far tighter box than the first read of the whole photo.
-const ZOOM_CONTEXT_RATIO = 0.6;
-const ZOOM_MIN_CONTEXT = 24;
-const ZOOM_LONG_EDGE = 1000;
-// A zoomed box much smaller than the first one means the model latched onto a fragment of the plate.
-const MIN_REFINED_AREA_RATIO = 0.35;
-// Just enough black to be sure of covering the plate border.
-const PAINT_PADDING_RATIO = 0.04;
-const PAINT_MIN_PADDING = 3;
+// Second look: each plate is cropped out with this much room around it and its four corners are
+// measured again at high zoom - far more exact than the first read of the whole photo, and it follows
+// the plate's real (angled) outline instead of an upright box that would also cover the paint.
+const ZOOM_CONTEXT_RATIO = 0.35;
+const ZOOM_MIN_CONTEXT = 20;
+const ZOOM_LONG_EDGE = 1200;
+// The zoomed outline should be about the size of the rough box; far smaller means the model found
+// a fragment of the plate, far larger means it found something else.
+const MIN_REFINED_AREA_RATIO = 0.3;
+const MAX_REFINED_AREA_RATIO = 1.5;
+// Just enough black to be sure of covering the plate's own edge.
+const PAINT_GROW_RATIO = 0.02;
+const PAINT_GROW_PX = 1.5;
 
 export interface PreparedPhoto {
   jpeg: Buffer;
@@ -116,8 +119,33 @@ async function findRoughPlateBoxes(photo: PreparedPhoto): Promise<PlateBox[]> {
   return mergeOverlapping(boxes);
 }
 
-/** Second read of one plate, cropped and enlarged. Falls back to the rough box if the zoomed read is unusable. */
-async function tightenBox(photo: PreparedPhoto, rough: PlateBox): Promise<PlateBox> {
+function polygonArea(points: PlatePoint[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+function boxToPolygon(b: PlateBox): PlatePoint[] {
+  return [
+    { x: b.x1, y: b.y1 },
+    { x: b.x2, y: b.y1 },
+    { x: b.x2, y: b.y2 },
+    { x: b.x1, y: b.y2 },
+  ];
+}
+
+function polygonBounds(points: PlatePoint[]): PlateBox {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
+}
+
+/** Second read of one plate, cropped and enlarged, giving its exact corners. Falls back to the rough box if the zoomed read is unusable. */
+async function tightenPlate(photo: PreparedPhoto, rough: PlateBox): Promise<PlatePoint[]> {
   const w = rough.x2 - rough.x1;
   const h = rough.y2 - rough.y1;
   const padX = Math.max(ZOOM_MIN_CONTEXT, w * ZOOM_CONTEXT_RATIO);
@@ -137,78 +165,71 @@ async function tightenBox(photo: PreparedPhoto, rough: PlateBox): Promise<PlateB
       .toBuffer({ resolveWithObject: true });
 
     const scale = info.width / cropW;
-    const found = await detectPlateBoxes(data, info.width, info.height);
+    const found = await detectPlateCorners(data, info.width, info.height);
 
-    // The crop can catch a neighbouring plate; the right one is the box that lines up with the rough one.
-    let best: PlateBox | null = null;
+    // The crop can catch a neighbouring plate; the right one is the shape that lines up with the rough box.
+    let best: PlatePoint[] | null = null;
     let bestOverlap = 0;
-    for (const raw of found) {
-      const box = normalizeBox(raw, info.width, info.height);
-      if (!box) continue;
-      const inPhoto: PlateBox = {
-        x1: left + box.x1 / scale,
-        y1: top + box.y1 / scale,
-        x2: left + box.x2 / scale,
-        y2: top + box.y2 / scale,
-      };
-      const overlap = intersectionArea(inPhoto, rough);
+    for (const quad of found) {
+      const inPhoto = quad.map((p) => ({ x: left + p.x / scale, y: top + p.y / scale }));
+      const overlap = intersectionArea(polygonBounds(inPhoto), rough);
       if (overlap > bestOverlap) {
         best = inPhoto;
         bestOverlap = overlap;
       }
     }
-    if (best && area(best) >= area(rough) * MIN_REFINED_AREA_RATIO) return best;
+    if (best) {
+      const shapeArea = polygonArea(best);
+      const roughArea = area(rough);
+      if (shapeArea >= roughArea * MIN_REFINED_AREA_RATIO && shapeArea <= roughArea * MAX_REFINED_AREA_RATIO) {
+        return best;
+      }
+    }
   } catch {
     // keep the rough box
   }
-  return rough;
+  return boxToPolygon(rough);
 }
 
-function toPaintBox(box: PlateBox, width: number, height: number): PlateBox | null {
-  const padX = Math.max(PAINT_MIN_PADDING, (box.x2 - box.x1) * PAINT_PADDING_RATIO);
-  const padY = Math.max(PAINT_MIN_PADDING, (box.y2 - box.y1) * PAINT_PADDING_RATIO);
-  const left = Math.max(0, Math.floor(box.x1 - padX));
-  const top = Math.max(0, Math.floor(box.y1 - padY));
-  const right = Math.min(width, Math.ceil(box.x2 + padX));
-  const bottom = Math.min(height, Math.ceil(box.y2 + padY));
-  if (right <= left || bottom <= top) return null;
-  return { x1: left, y1: top, x2: right, y2: bottom };
+/** Grows the shape outward by a hair so the plate's own edge is never left showing. */
+function growPolygon(points: PlatePoint[], width: number, height: number): PlatePoint[] {
+  const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
+  const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
+  return points.map((p) => {
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+    return {
+      x: Math.min(width, Math.max(0, cx + dx * (1 + PAINT_GROW_RATIO) + Math.sign(dx) * PAINT_GROW_PX)),
+      y: Math.min(height, Math.max(0, cy + dy * (1 + PAINT_GROW_RATIO) + Math.sign(dy) * PAINT_GROW_PX)),
+    };
+  });
 }
 
-/** Boxes to paint, one per plate, fitted close to the plate. */
-export async function findPlateBoxes(photo: PreparedPhoto): Promise<PlateBox[]> {
+/** Shapes to paint, one per plate, following the plate's own outline. */
+export async function findPlateShapes(photo: PreparedPhoto): Promise<PlatePoint[][]> {
   const rough = await findRoughPlateBoxes(photo);
-  const tight = await Promise.all(rough.map((box) => tightenBox(photo, box)));
-  return tight
-    .map((box) => toPaintBox(box, photo.width, photo.height))
-    .filter((box): box is PlateBox => box !== null);
+  const tight = await Promise.all(rough.map((box) => tightenPlate(photo, box)));
+  return tight.map((shape) => growPolygon(shape, photo.width, photo.height));
 }
 
 /** Paints solid black over every number plate found in the photo. */
 export async function blackOutPlates(bytes: Buffer): Promise<MaskedPhoto> {
   const photo = await preparePhoto(bytes);
-  const boxes = await findPlateBoxes(photo);
-  if (boxes.length === 0) return { ...photo, platesFound: 0 };
+  const shapes = await findPlateShapes(photo);
+  if (shapes.length === 0) return { ...photo, platesFound: 0 };
 
+  const polygons = shapes
+    .map((s) => `<polygon points="${s.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}" fill="#000"/>`)
+    .join("");
+  const overlay = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${photo.width}" height="${photo.height}">${polygons}</svg>`
+  );
   const jpeg = await sharp(photo.jpeg)
-    .composite(
-      boxes.map((b) => ({
-        input: {
-          create: {
-            width: b.x2 - b.x1,
-            height: b.y2 - b.y1,
-            channels: 3 as const,
-            background: { r: 0, g: 0, b: 0 },
-          },
-        },
-        left: b.x1,
-        top: b.y1,
-      }))
-    )
+    .composite([{ input: overlay, left: 0, top: 0 }])
     .jpeg({ quality: JPEG_QUALITY })
     .toBuffer();
 
-  return { jpeg, width: photo.width, height: photo.height, platesFound: boxes.length };
+  return { jpeg, width: photo.width, height: photo.height, platesFound: shapes.length };
 }
 
 // A4 in points, orientation chosen per photo so landscape and portrait shots both fill the page.

@@ -190,7 +190,19 @@ export function CarPhotosApp({ vehicles, initialJobs, sentPlates }: Props) {
     try {
       const filePath = await uploadQuickReplyPdf(name, pdfBlob);
       await queueQuickReply({ plate: name, shortcut, message, filePath });
+      const sentShortcut = shortcut;
       setJobs(await listQuickReplyJobs());
+
+      // start a clean page for the next car - progress stays visible under "Recent LuluChat sends"
+      for (const p of photos) URL.revokeObjectURL(p.previewUrl);
+      setPhotos([]);
+      setPdfBlob(null);
+      setName("");
+      setShortcut("");
+      setMessage("");
+      setError(null);
+      setNotice(`Sent to LuluChat: ${sentShortcut}. Ready for the next car.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Could not send - try again.");
     } finally {

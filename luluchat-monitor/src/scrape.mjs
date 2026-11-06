@@ -5,8 +5,8 @@
 
 export class SessionExpiredError extends Error {}
 
-const INBOX_URL = "https://app.luluchat.io/inbox/list";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const INBOX_URL = "https://app.luluchat.io/inbox/list";
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Runs in the page: every currently rendered chat row (the list is virtualised, so only ~10 exist at once). */
 function extractRows() {
@@ -34,7 +34,7 @@ function scrollStep() {
 }
 
 /** The header phone-icon button; its text reads "Channels (60179952261)" but the accessible name differs. */
-const channelsButton = (page) => page.locator("button", { hasText: /Channels\s*\(/ }).first();
+export const channelsButton = (page) => page.locator("button", { hasText: /Channels\s*\(/ }).first();
 
 async function openUnreadTab(page) {
   const tab = page.getByRole("tab", { name: /^Unread/ }).first();
@@ -72,24 +72,24 @@ async function collectUnreadRows(page, log = () => {}) {
 }
 
 /** The header button reads "Channels (60179952261)": which channel is selected right now. */
-async function currentPhone(page) {
+export async function currentPhone(page) {
   const label = (await channelsButton(page).first().innerText().catch(() => "")) || "";
   const aria = (await channelsButton(page).first().getAttribute("aria-label").catch(() => "")) || "";
   return (label + " " + aria).match(/\d{8,}/)?.[0] ?? "";
 }
 
-async function openChannelModal(page) {
+export async function openChannelModal(page) {
   await channelsButton(page).first().click();
   await page.getByText("Phone Number:").first().waitFor({ state: "visible", timeout: 15_000 });
 }
 
-async function closeChannelModal(page) {
+export async function closeChannelModal(page) {
   await page.keyboard.press("Escape");
   await sleep(500);
 }
 
 /** Runs in the page: every channel card in the open dialog -> { title, phone }. Parses the dialog text: the title is the line just above "Phone Number: <digits>". */
-function extractChannelCards() {
+export function extractChannelCards() {
   const lines = document.body.innerText.split("\n").map((l) => l.trim()).filter(Boolean);
   const cards = new Map();
   lines.forEach((line, i) => {
@@ -99,7 +99,7 @@ function extractChannelCards() {
   return [...cards.values()];
 }
 
-async function switchChannel(page, phone) {
+export async function switchChannel(page, phone) {
   if ((await currentPhone(page)) === phone) return;
   await openChannelModal(page);
   // Find this channel's card, then click its select/switch button. NEVER the Disconnect button.
@@ -128,7 +128,7 @@ async function switchChannel(page, phone) {
 }
 
 /** Rejects if `promise` takes longer than `ms` (so one stuck page step can never hang the whole run). */
-const withTimeout = (promise, ms, what) =>
+export const withTimeout = (promise, ms, what) =>
   Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms))]);
 
 /**

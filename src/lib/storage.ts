@@ -90,3 +90,17 @@ export async function uploadStaffPhoto(key: string, file: File): Promise<string>
   if (error) throw new Error(error.message);
   return path;
 }
+
+/** Car Photos PDF waiting to be picked up by the LuluChat robot - lives under quickreply/. */
+export async function uploadQuickReplyPdf(plate: string, pdf: Blob): Promise<string> {
+  const supabase = createClient();
+  const normalized = plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "car";
+  const path = `quickreply/${normalized}-${Date.now()}.pdf`;
+
+  const { error } = await supabase.storage
+    .from("submission-files")
+    .upload(path, pdf, { upsert: false, contentType: "application/pdf" });
+
+  if (error) throw new Error(error.message);
+  return path;
+}

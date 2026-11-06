@@ -17,6 +17,10 @@ import {
   carPhotoGuideAt,
 } from "@/lib/carPhotoSlots";
 import { convertToJpeg } from "@/lib/clientPhoto";
+import { uploadQuickReplyPdf } from "@/lib/storage";
+import { buildQuickReplyDraft, type QuickReplyJobRow } from "@/lib/quickReplyJobs";
+import type { StockBoardVehicle } from "@/lib/stockBoard";
+import { listQuickReplyJobs, queueQuickReply } from "@/app/car-photos/actions";
 
 interface Photo {
   id: string;
@@ -33,8 +37,30 @@ function isImageFile(file: File): boolean {
   return file.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp)$/i.test(file.name);
 }
 
-export function CarPhotosApp() {
+interface Props {
+  vehicles: StockBoardVehicle[];
+  initialJobs: QuickReplyJobRow[];
+}
+
+function normalizePlate(plate: string): string {
+  return plate.trim().toUpperCase().replace(/s+/g, "");
+}
+
+const JOB_LABEL: Record<QuickReplyJobRow["status"], string> = {
+  queued: "Waiting for the robot…",
+  running: "Sending to LuluChat…",
+  done: "Done - quick reply is in LuluChat",
+  failed: "Failed",
+};
+
+export function CarPhotosApp({ vehicles, initialJobs }: Props) {
   const [name, setName] = useState("");
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [shortcut, setShortcut] = useState("");
+  const [message, setMessage] = useState("");
+  const [jobs, setJobs] = useState<QuickReplyJobRow[]>(initialJobs);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [converting, setConverting] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +76,17 @@ export function CarPhotosApp() {
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
+
+  const hasActiveJob = jobs.some((j) => j.status === "queued" || j.status === "running");
+  useEffect(() => {
+    if (!hasActiveJob) return;
+    const timer = setInterval(() => {
+      listQuickReplyJobs()
+        .then(setJobs)
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [hasActiveJob]);
 
   useEffect(() => {
     return () => {
@@ -86,6 +123,7 @@ export function CarPhotosApp() {
           previewUrl: URL.createObjectURL(blob),
         };
         setPhotos((prev) => [...prev, photo]);
+        setPdfBlob(null);
       } catch (err) {
         problems.push(`${file.name}: ${err instanceof Error ? err.message : "could not be read"}`);
       } finally {
@@ -96,6 +134,7 @@ export function CarPhotosApp() {
   }
 
   function handleRemove(id: string) {
+    setPdfBlob(null);
     setPhotos((prev) => {
       const gone = prev.find((p) => p.id === id);
       if (gone) URL.revokeObjectURL(gone.previewUrl);
@@ -104,6 +143,7 @@ export function CarPhotosApp() {
   }
 
   function handleMove(index: number, by: number) {
+    setPdfBlob(null);
     setPhotos((prev) => {
       const target = index + by;
       if (target < 0 || target >= prev.length) return prev;
@@ -114,6 +154,7 @@ export function CarPhotosApp() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
+    setPdfBlob(null);
     setPhotos((prev) => {
       const from = prev.findIndex((p) => p.id === active.id);
       const to = prev.findIndex((p) => p.id === over.id);
@@ -124,8 +165,34 @@ export function CarPhotosApp() {
   function handleClear() {
     for (const p of photos) URL.revokeObjectURL(p.previewUrl);
     setPhotos([]);
+    setPdfBlob(null);
     setNotice(null);
     setError(null);
+  }
+
+  function handlePlateChange(value: string) {
+    setName(value);
+    const match = vehicles.find((v) => normalizePlate(v.vin ?? "") === normalizePlate(value));
+    if (match) {
+      const draft = buildQuickReplyDraft(match);
+      setShortcut(draft.shortcut);
+      setMessage(draft.message);
+    }
+  }
+
+  async function handleSendToLuluChat() {
+    if (!pdfBlob) return;
+    setSendError(null);
+    setIsSending(true);
+    try {
+      const filePath = await uploadQuickReplyPdf(name, pdfBlob);
+      await queueQuickReply({ plate: name, shortcut, message, filePath });
+      setJobs(await listQuickReplyJobs());
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Could not send - try again.");
+    } finally {
+      setIsSending(false);
+    }
   }
 
   async function handleMakePdf() {
@@ -152,6 +219,7 @@ export function CarPhotosApp() {
         .map((i) => `${i + 1} (${carPhotoGuideAt(i).label})`);
 
       const blob = await res.blob();
+      setPdfBlob(blob);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -182,13 +250,21 @@ export function CarPhotosApp() {
           one photo per page. Photos are not saved.
         </p>
         <div className="mt-3 max-w-sm">
-          <label className={LABEL}>Car plate / name (for the file name)</label>
+          <label className={LABEL}>Car plate (pick from the Stock Board)</label>
           <input
             className={FIELD}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => handlePlateChange(e.target.value)}
             placeholder="e.g. WWT7595"
+            list="car-photo-plates"
           />
+          <datalist id="car-photo-plates">
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.vin}>
+                {v.vehicle}
+              </option>
+            ))}
+          </datalist>
         </div>
       </div>
 
@@ -268,6 +344,65 @@ export function CarPhotosApp() {
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       {notice && <p className="mt-3 text-sm text-fg">{notice}</p>}
+
+      {pdfBlob && (
+        <div className="mt-5 rounded-[10px] border border-line bg-panel p-4">
+          <h2 className="font-medium text-fg">Send to LuluChat</h2>
+          <p className="mt-1 text-sm text-muted">
+            Creates a quick reply with this PDF in LuluChat. If one with the same shortcut already
+            exists it is replaced.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className={LABEL}>Shortcut</label>
+              <input className={FIELD} value={shortcut} onChange={(e) => setShortcut(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={LABEL}>Message</label>
+              <textarea
+                className={`${FIELD} min-h-[88px]`}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSendToLuluChat}
+            disabled={isSending || !shortcut.trim() || !message.trim()}
+            className="mt-3 rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110 disabled:opacity-50"
+          >
+            {isSending ? "Sending…" : "Send to LuluChat"}
+          </button>
+          {sendError && <p className="mt-2 text-sm text-danger">{sendError}</p>}
+        </div>
+      )}
+
+      {jobs.length > 0 && (
+        <div className="mt-5 rounded-[10px] border border-line bg-panel p-4">
+          <h2 className="font-medium text-fg">Recent LuluChat sends</h2>
+          <ul className="mt-2 divide-y divide-line text-sm">
+            {jobs.map((job) => (
+              <li key={job.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                <span className="min-w-0 truncate text-fg" title={job.shortcut}>
+                  {job.shortcut}
+                </span>
+                <span
+                  className={
+                    job.status === "failed"
+                      ? "text-danger"
+                      : job.status === "done"
+                        ? "text-status-reserved"
+                        : "text-muted"
+                  }
+                >
+                  {JOB_LABEL[job.status]}
+                  {job.status === "failed" && job.error ? `: ${job.error}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

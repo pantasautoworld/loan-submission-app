@@ -59,3 +59,14 @@ export async function fetchQuickReplyJobs(supabase: SupabaseClient, limit = 10):
   if (error) throw new Error(error.message);
   return (data ?? []) as QuickReplyJobRow[];
 }
+
+/** Plates (upper-case, no spaces) whose quick reply has been saved in LuluChat - shown with a tick in the Car Photos picker. */
+export async function fetchSentPlates(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("luluchat_quick_reply_jobs")
+    .select("plate")
+    .eq("status", "done");
+  if (error) throw new Error(error.message);
+  const plates = (data ?? []).map((r: { plate: string }) => r.plate.trim().toUpperCase().replace(/\s+/g, ""));
+  return [...new Set(plates.filter(Boolean))];
+}

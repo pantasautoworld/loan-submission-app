@@ -40,6 +40,8 @@ function isImageFile(file: File): boolean {
 interface Props {
   vehicles: StockBoardVehicle[];
   initialJobs: QuickReplyJobRow[];
+  /** Plates already saved in LuluChat (normalised) - get a tick in the picker. */
+  sentPlates: string[];
 }
 
 function normalizePlate(plate: string): string {
@@ -53,13 +55,14 @@ const JOB_LABEL: Record<QuickReplyJobRow["status"], string> = {
   failed: "Failed",
 };
 
-export function CarPhotosApp({ vehicles, initialJobs }: Props) {
+export function CarPhotosApp({ vehicles, initialJobs, sentPlates }: Props) {
   const [name, setName] = useState("");
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [shortcut, setShortcut] = useState("");
   const [message, setMessage] = useState("");
   const [jobs, setJobs] = useState<QuickReplyJobRow[]>(initialJobs);
   const [isSending, setIsSending] = useState(false);
+  const [showPlateList, setShowPlateList] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [converting, setConverting] = useState(0);
@@ -241,6 +244,21 @@ export function CarPhotosApp({ vehicles, initialJobs }: Props) {
     }
   }
 
+  // plates already saved in LuluChat: loaded from the database, plus any that finished while this page was open
+  const sentSet = new Set([
+    ...sentPlates,
+    ...jobs.filter((j) => j.status === "done").map((j) => normalizePlate(j.plate)),
+  ]);
+  const plateQuery = name.trim().toLowerCase();
+  const plateMatches = vehicles
+    .filter(
+      (v) =>
+        !plateQuery ||
+        (v.vin ?? "").toLowerCase().includes(plateQuery) ||
+        (v.vehicle ?? "").toLowerCase().includes(plateQuery)
+    )
+    .slice(0, 60);
+
   return (
     <div className="mx-auto max-w-[1100px] px-6 py-5">
       <div className="mb-4 rounded-[10px] border border-line bg-panel p-4">
@@ -249,22 +267,53 @@ export function CarPhotosApp({ vehicles, initialJobs }: Props) {
           into the guide order below - the system then blacks out every number plate and makes one PDF,
           one photo per page. Photos are not saved.
         </p>
-        <div className="mt-3 max-w-sm">
+        <div className="relative mt-3 max-w-sm">
           <label className={LABEL}>Car plate (pick from the Stock Board)</label>
           <input
             className={FIELD}
             value={name}
-            onChange={(e) => handlePlateChange(e.target.value)}
+            onChange={(e) => {
+              handlePlateChange(e.target.value);
+              setShowPlateList(true);
+            }}
+            onFocus={() => setShowPlateList(true)}
+            onBlur={() => setShowPlateList(false)}
             placeholder="e.g. WWT7595"
-            list="car-photo-plates"
+            autoComplete="off"
           />
-          <datalist id="car-photo-plates">
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.vin}>
-                {v.vehicle}
-              </option>
-            ))}
-          </datalist>
+          {showPlateList && plateMatches.length > 0 && (
+            <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-[7px] border border-line bg-panel shadow-lg">
+              {plateMatches.map((v) => {
+                const sent = sentSet.has(normalizePlate(v.vin ?? ""));
+                return (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      // mousedown, not click: the input's blur would close the list before a click lands
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handlePlateChange(v.vin);
+                        setShowPlateList(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-panel-raised"
+                    >
+                      <span className="font-mono text-fg">{v.vin}</span>
+                      {sent && (
+                        <span
+                          className="font-semibold text-status-reserved"
+                          title="Already saved in LuluChat"
+                          aria-label="Already saved in LuluChat"
+                        >
+                          ✓
+                        </span>
+                      )}
+                      <span className="min-w-0 truncate text-muted">{v.vehicle}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
 

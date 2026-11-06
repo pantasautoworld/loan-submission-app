@@ -232,10 +232,9 @@ export async function blackOutPlates(bytes: Buffer): Promise<MaskedPhoto> {
   return { jpeg, width: photo.width, height: photo.height, platesFound: shapes.length };
 }
 
-// A4 in points, orientation chosen per photo so landscape and portrait shots both fill the page.
-const A4_LONG = 841.89;
-const A4_SHORT = 595.28;
-const PAGE_MARGIN = 24;
+// Each page is cut to its photo's own shape, so the photo fills the whole page - no white border and
+// nothing cropped. The long edge is A4's long side, so pages print at a normal size.
+const PAGE_LONG_EDGE = 841.89;
 
 /** One photo per page, in the order given. */
 export async function buildCarPhotoPdf(photos: PreparedPhoto[], title: string): Promise<Buffer> {
@@ -243,19 +242,13 @@ export async function buildCarPhotoPdf(photos: PreparedPhoto[], title: string): 
   pdf.setTitle(title);
 
   for (const photo of photos) {
-    const landscape = photo.width >= photo.height;
-    const pageW = landscape ? A4_LONG : A4_SHORT;
-    const pageH = landscape ? A4_SHORT : A4_LONG;
+    const scale = PAGE_LONG_EDGE / Math.max(photo.width, photo.height);
+    const pageW = photo.width * scale;
+    const pageH = photo.height * scale;
     const page = pdf.addPage([pageW, pageH]);
 
     const image = await pdf.embedJpg(photo.jpeg);
-    const scale = Math.min(
-      (pageW - PAGE_MARGIN * 2) / photo.width,
-      (pageH - PAGE_MARGIN * 2) / photo.height
-    );
-    const w = photo.width * scale;
-    const h = photo.height * scale;
-    page.drawImage(image, { x: (pageW - w) / 2, y: (pageH - h) / 2, width: w, height: h });
+    page.drawImage(image, { x: 0, y: 0, width: pageW, height: pageH });
   }
 
   return Buffer.from(await pdf.save());

@@ -541,6 +541,28 @@ export default async function HomePage({
             </p>
           </Link>
           <Link
+            href="/car-photos"
+            className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
+          >
+            <div className="mb-3 flex h-24 w-24 items-center justify-center rounded-[9px] bg-status-available/15 transition-colors group-hover:bg-status-available/25">
+              <svg viewBox="0 0 48 48" className="h-20 w-20">
+                <path
+                  d="M6 16a3 3 0 0 1 3-3h6l3-4h12l3 4h6a3 3 0 0 1 3 3v21a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3Z"
+                  fill="#e1b93b"
+                  stroke="#0f1115"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <circle cx="24" cy="26" r="8" fill="#F2F1EC" stroke="#0f1115" strokeWidth="2.2" />
+                <circle cx="24" cy="26" r="3.2" fill="#2c333c" />
+              </svg>
+            </div>
+            <h2 className="font-medium text-fg">Car Photos</h2>
+            <p className="mt-1 text-sm text-muted">
+              Upload the car photos - plates are blacked out and made into one PDF.
+            </p>
+          </Link>
+          <Link
             href="/recon"
             className="group rounded-[10px] border border-line bg-panel p-5 transition-colors hover:border-amber"
           >

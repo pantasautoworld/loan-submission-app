@@ -82,6 +82,9 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
             <Link href="/voc" className="hover:text-amber">
               VOC
             </Link>
+            <Link href="/car-photos" className="hover:text-amber">
+              Car Photos
+            </Link>
             <Link href="/invoices" className="hover:text-amber">
               Claim Invoices
             </Link>

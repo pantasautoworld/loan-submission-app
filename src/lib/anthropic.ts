@@ -17,7 +17,11 @@ type DocSource =
   | { kind: "image"; mediaType: "image/jpeg" | "image/png" | "image/webp"; base64: string }
   | { kind: "pdf"; base64: string };
 
-async function extractJson<T>(source: DocSource, instructions: string): Promise<T> {
+async function extractJson<T>(
+  source: DocSource,
+  instructions: string,
+  model: string = MODEL
+): Promise<T> {
   const anthropic = client();
 
   const documentBlock =
@@ -32,7 +36,7 @@ async function extractJson<T>(source: DocSource, instructions: string): Promise<
         } as const);
 
   const message = await anthropic.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 1024,
     messages: [
       {
@@ -252,4 +256,36 @@ export async function extractGrantDetails(source: DocSource): Promise<GrantExtra
 
   bestGroup.sort((a, b) => scoreGrantExtraction(b) - scoreGrantExtraction(a));
   return bestGroup[0];
+}
+
+// Locating a plate needs sharper spatial reasoning than reading text off a document, so it
+// defaults to a stronger model than the document-scanning one.
+const PLATE_MODEL = process.env.ANTHROPIC_PLATE_MODEL || "claude-sonnet-5-5";
+
+export interface PlateBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/** Finds every vehicle number plate in a car photo. Boxes are in pixels of the image as sent (<= 1568px on the long edge so the API never rescales it). */
+export async function detectPlateBoxes(
+  jpeg: Buffer,
+  width: number,
+  height: number
+): Promise<PlateBox[]> {
+  const result = await extractJson<{ plates?: Partial<PlateBox>[] }>(
+    { kind: "image", mediaType: "image/jpeg", base64: jpeg.toString("base64") },
+    `This is a photo of a car, ${width} pixels wide and ${height} pixels tall. Find EVERY vehicle number plate (licence plate) visible anywhere in the photo - the car being photographed and any other car in the background, front or rear plates, small, distant, angled or partly visible ones. For each plate return a tight bounding box around the whole plate rectangle including its border, in pixel coordinates of this image: x1,y1 is the top-left corner and x2,y2 the bottom-right corner (0,0 is the top-left of the image). Do not box logos, the bumper or anything that is not a plate. If the photo shows no plate at all (for example an interior shot), return an empty list. Return {"plates": [{"x1": number, "y1": number, "x2": number, "y2": number}]}.`,
+    PLATE_MODEL
+  );
+
+  const boxes: PlateBox[] = [];
+  for (const p of result.plates ?? []) {
+    const { x1, y1, x2, y2 } = p;
+    if ([x1, y1, x2, y2].some((n) => typeof n !== "number" || !Number.isFinite(n))) continue;
+    boxes.push({ x1: x1!, y1: y1!, x2: x2!, y2: y2! });
+  }
+  return boxes;
 }

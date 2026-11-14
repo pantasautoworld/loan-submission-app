@@ -89,6 +89,11 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
               Claim Invoices
             </Link>
             {role === "admin" && (
+              <Link href="/ai-desk" className="hover:text-amber">
+                AI Reply Desk
+              </Link>
+            )}
+            {role === "admin" && (
               <Link href="/staff" className="hover:text-amber">
                 Manage Staff
               </Link>

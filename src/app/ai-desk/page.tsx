@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
 import { DraftCard } from "@/components/aiDesk/DraftCard";
@@ -40,7 +41,12 @@ export default async function AiDeskPage() {
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-xl text-fg">AI Reply Desk</h1>
-          <KillSwitch enabled={aiEnabled} />
+          <div className="flex items-center gap-4">
+            <Link href="/ai-desk/history" className="text-sm text-muted hover:text-amber">
+              Chat History
+            </Link>
+            <KillSwitch enabled={aiEnabled} />
+          </div>
         </div>
 
         <p className="text-sm text-muted">

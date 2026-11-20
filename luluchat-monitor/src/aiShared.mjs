@@ -20,7 +20,7 @@ export async function loadEnv() {
 }
 
 export async function rest(path, { method = "GET", body, prefer } = {}) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`, {
+  const res = await fetch(`${process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`, {
     method,
     headers: {
       apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,

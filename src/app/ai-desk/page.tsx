@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { TopNav } from "@/components/TopNav";
+import { AutoRefresh } from "@/components/aiDesk/AutoRefresh";
 import { DraftCard } from "@/components/aiDesk/DraftCard";
 import { KillSwitch } from "@/components/aiDesk/KillSwitch";
 
@@ -57,10 +58,12 @@ export default async function AiDeskPage() {
           </div>
         </div>
 
+        <AutoRefresh renderedAt={new Date().toISOString()} />
+
         <p className="text-sm text-muted">
           {aiEnabled ? "AI is on." : "AI is OFF - no new drafts are created."} Learning so far:{" "}
           {conversationCount ?? 0} conversations, {messageCount ?? 0} messages. Drafts waiting for
-          your review: {rows.length}. Drafts are written from customers' new LuluChat messages.
+          your review: {rows.length}. Drafts are written from new LuluChat messages from customers.
           Nothing is sent to customers - approving only records your decision.
         </p>
 

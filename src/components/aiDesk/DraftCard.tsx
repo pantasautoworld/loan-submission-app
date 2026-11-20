@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { reviewDraft } from "@/app/ai-desk/actions";
 
 interface Props {
   draftId: string;
+  conversationId: string;
+  channelLabel: string;
+  needsHuman: boolean;
   contactLabel: string;
   customerMessage: string;
   intent: string;
@@ -14,6 +18,9 @@ interface Props {
 
 export function DraftCard({
   draftId,
+  conversationId,
+  channelLabel,
+  needsHuman,
   contactLabel,
   customerMessage,
   intent,
@@ -40,9 +47,19 @@ export function DraftCard({
   return (
     <div className="space-y-3 rounded-[10px] border border-line bg-panel p-4">
       <div className="flex items-center justify-between text-xs text-muted">
-        <span className="font-medium text-fg">{contactLabel}</span>
-        {intent && <span className="rounded bg-panel-raised px-2 py-0.5">{intent}</span>}
+        <Link href={`/ai-desk/history/${conversationId}`} className="font-medium text-fg hover:text-amber">
+          {contactLabel}
+        </Link>
+        <span className="flex items-center gap-2">
+          {needsHuman && (
+            <span className="rounded bg-panel-raised px-2 py-0.5 font-medium text-danger">
+              Needs a person
+            </span>
+          )}
+          {intent && <span className="rounded bg-panel-raised px-2 py-0.5">{intent}</span>}
+        </span>
       </div>
+      {channelLabel && <p className="-mt-2 text-[11px] text-muted">{channelLabel}</p>}
 
       <p className="rounded-[7px] bg-panel-raised p-2 text-sm text-fg">
         <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted">Customer</span>
@@ -84,7 +101,7 @@ export function DraftCard({
         </button>
       </div>
       <p className="text-[11px] text-muted">
-        Approving only records your decision for learning - nothing is sent to the customer yet.
+        Approving only records your decision for learning - nothing is sent to the customer.
       </p>
     </div>
   );

@@ -9,6 +9,7 @@
     "check": "node src/monitor.mjs --dry",
     "start": "node src/tick.mjs",
     "quickreply": "node src/quickreply.mjs",
+    "live": "node src/live.mjs",
     "test": "node --test src/"
   },
   "dependencies": {

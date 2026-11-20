@@ -10,7 +10,15 @@ interface DraftRow {
   draft_text: string;
   suggested_quick_reply: string | null;
   reply_to_message_id: string | null;
-  ai_conversations: { contact_name: string; contact_phone: string } | null;
+  conversation_id: string;
+  customer_message: string;
+  needs_human: boolean;
+  ai_conversations: {
+    contact_name: string;
+    contact_phone: string;
+    channel_title: string | null;
+    assignee: string | null;
+  } | null;
   ai_messages: { body: string } | null;
 }
 
@@ -23,7 +31,7 @@ export default async function AiDeskPage() {
       supabase
         .from("ai_drafts")
         .select(
-          "id, intent, draft_text, suggested_quick_reply, reply_to_message_id, ai_conversations(contact_name, contact_phone), ai_messages!ai_drafts_reply_to_message_id_fkey(body)"
+          "id, intent, draft_text, suggested_quick_reply, reply_to_message_id, conversation_id, customer_message, needs_human, ai_conversations(contact_name, contact_phone, channel_title, assignee), ai_messages!ai_drafts_reply_to_message_id_fkey(body)"
         )
         .eq("status", "pending")
         .order("created_at", { ascending: true })
@@ -52,14 +60,14 @@ export default async function AiDeskPage() {
         <p className="text-sm text-muted">
           {aiEnabled ? "AI is on." : "AI is OFF - no new drafts are created."} Learning so far:{" "}
           {conversationCount ?? 0} conversations, {messageCount ?? 0} messages. Drafts waiting for
-          your review: {rows.length}. Nothing is sent to customers yet - this is the learning
-          stage.
+          your review: {rows.length}. Drafts are written from customers' new LuluChat messages.
+          Nothing is sent to customers - approving only records your decision.
         </p>
 
         {rows.length === 0 ? (
           <div className="rounded-[10px] border border-line bg-panel p-6 text-sm text-muted">
-            No drafts waiting. Once the chat reader is connected, AI drafts will appear here for
-            you to approve, edit or reject.
+            No drafts waiting. When customers send new LuluChat messages and the live reader is
+            running, AI drafts appear here for you to approve, edit or reject.
           </div>
         ) : (
           <div className="space-y-3">
@@ -70,7 +78,12 @@ export default async function AiDeskPage() {
                 contactLabel={
                   d.ai_conversations?.contact_name || d.ai_conversations?.contact_phone || "Customer"
                 }
-                customerMessage={d.ai_messages?.body ?? ""}
+                conversationId={d.conversation_id}
+                channelLabel={[d.ai_conversations?.channel_title, d.ai_conversations?.assignee]
+                  .filter(Boolean)
+                  .join(" · ")}
+                needsHuman={d.needs_human}
+                customerMessage={d.customer_message || d.ai_messages?.body || ""}
                 intent={d.intent}
                 draftText={d.draft_text}
                 suggestedQuickReply={d.suggested_quick_reply}

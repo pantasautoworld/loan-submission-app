@@ -73,7 +73,7 @@ export async function loadDialogue(conversationId) {
 }
 
 // ---------- Claude ----------
-export const usage = { input: 0, output: 0 };
+export const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
 export async function ask(system, user, maxTokens) {
   for (let attempt = 1; ; attempt++) {
@@ -88,6 +88,8 @@ export async function ask(system, user, maxTokens) {
       const json = JSON.parse(raw);
       usage.input += json.usage?.input_tokens ?? 0;
       usage.output += json.usage?.output_tokens ?? 0;
+      usage.cacheRead += json.usage?.cache_read_input_tokens ?? 0;
+      usage.cacheWrite += json.usage?.cache_creation_input_tokens ?? 0;
       const text = json.content.map((b) => b.text ?? "").join("");
       if (text.trim() || attempt >= 3) return text; // an empty reply is retried
     }
@@ -124,8 +126,12 @@ export function findProfile(profiles, name) {
   return [...profiles.values()].find((p) => p.staff_name.toLowerCase() === want);
 }
 
-/** System prompt for drafting the NEXT reply (used by backtest.mjs and live.mjs). */
-export function draftSystem(playbook, profile) {
+/**
+ * The draft prompt as two blocks. Block 1 (context, rules, playbook) is identical for every staff member and block 2 is
+ * that staff member's style: both are marked for Anthropic prompt caching, so repeat drafts pay about a tenth of the
+ * normal price for the text that never changes.
+ */
+export function draftSystemBlocks(playbook, profile) {
   const rules = playbook.map((p) => {
     const ex = (p.examples ?? [])[0];
     return `- ${p.topic}: ${p.rule_text}${ex ? ` Example: customer "${ex.customer}" -> staff "${ex.staff_reply}"` : ""}`;
@@ -133,7 +139,7 @@ export function draftSystem(playbook, profile) {
   const style = profile
     ? `STAFF STYLE (write as ${profile.staff_name}):\n${profile.style_notes}\nOpening: ${profile.opening_style}\nTypical replies:\n${(profile.typical_replies ?? []).map((t) => `- ${t.situation}: ${t.reply}`).join("\n")}`
     : "STAFF STYLE: short, casual Bahasa Malaysia with a little English; address the customer as 'boss'.";
-  return `${CONTEXT}
+  const shared = `${CONTEXT}
 You draft the NEXT reply a staff member would send to the customer, for a human to review. Follow the team playbook and the staff member's style.
 Rules:
 - Never state a price, deposit, monthly amount, car model availability, office hours or approval promise unless it is a standing fact written in a playbook rule. Playbook EXAMPLES are old one-off chats, not current facts: use them for tone only, never copy their figures or car lists.
@@ -146,7 +152,15 @@ Rules:
 TEAM PLAYBOOK:
 ${rules}
 
-${style}
+Return ONLY JSON: {"intent": "short topic name", "draft_text": "the reply (use \n between separate short messages)", "confidence": 0-1, "needs_human": true/false}
+The staff member's style follows.`;
+  return [
+    { type: "text", text: shared, cache_control: { type: "ephemeral" } },
+    { type: "text", text: style, cache_control: { type: "ephemeral" } },
+  ];
+}
 
-Return ONLY JSON: {"intent": "short topic name", "draft_text": "the reply (use \n between separate short messages)", "confidence": 0-1, "needs_human": true/false}`;
+/** Same prompt as one string (used by backtest.mjs, which does not need caching). */
+export function draftSystem(playbook, profile) {
+  return draftSystemBlocks(playbook, profile).map((b) => b.text).join("\n\n");
 }

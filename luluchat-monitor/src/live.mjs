@@ -18,7 +18,7 @@ import {
 } from "./scrape.mjs";
 import { loadStorageState } from "./state.mjs";
 import {
-  MODEL, ask, draftSystem, findProfile, flagReader, isAutomation, loadEnv, loadRecent, log, mask, maskIc, messageLine, parseJson, rest, usage,
+  MODEL, ask, draftSystemBlocks, findProfile, flagReader, isAutomation, loadEnv, loadRecent, log, mask, maskIc, messageLine, parseJson, rest, usage,
 } from "./aiShared.mjs";
 
 const args = process.argv.slice(2);
@@ -84,6 +84,19 @@ async function collectUnread(page) {
 
 // ---------- drafting ----------
 const MEDIA_ONLY = /^(\s*(\[.*\]|voice (call|note)|missed (voice|video)? ?call|audio|photo|image|video|sticker|document|file|location|contact)\b|[\u{1F4F7}\u{1F3A4}\u{1F3A5}\u{1F4CE}])/iu;
+// A message that only acknowledges ("ok", "thanks", an emoji) needs no reply: skip it instead of paying for a draft.
+const ACK = /^(ok(ay|e)?|oki|k|thanks?|thank you|thx|tq|tqvm|ty|terima kasih|tks|noted|baik|baiklah|alright|sure|haha|hehe|hihi)$/;
+function isTrivial(text) {
+  const letters = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/(\p{L})\1+/gu, "$1").replace(/\s+/g, " ").trim();
+  return !letters || ACK.test(letters);
+}
+// Voice notes / photos cannot be read: a fixed holding reply is used (no AI call) and the draft is flagged for a person.
+const MEDIA_REPLY = "Maaf boss, saya tak dapat buka voice note / gambar ni. Boleh boss taip sekali apa yang nak tanya ya?";
+
+// Car availability is unknown to the AI (it has no stock list yet): flag questions about it and drafts that make a claim about it.
+const STOCK_QUESTION = /(\bstok\b|\bstock\b|\bavailable\b|masih ada|ada lagi|ada ke\b|xde ke|takde ke|ada tak\b|ada x\b)/i;
+const STOCK_CLAIM = /(\btakde\b|tak ada|\btiada\b|\bhabis\b|\bsold\b|ada stok|ada stock|ada unit|\bavailable\b)/i;
+
 // money / percentage figures the AI must not invent
 const FIGURE = /(rm\s?\d[\d,.]*|\d[\d,.]*\s?(k|ribu|%|percent|peratus)\b)/gi;
 
@@ -111,6 +124,15 @@ async function draftFor(channel, c, playbook, profiles) {
   const dup = await rest(`ai_drafts?source_key=eq.${sourceKey}&select=id`);
   if (dup.length) return { skipped: "already drafted", conv };
 
+  const mediaOnly = !customerText || MEDIA_ONLY.test(customerText);
+  if (mediaOnly) {
+    return {
+      conv,
+      row: { conversation_id: conv.id, intent: "voice / photo", draft_text: MEDIA_REPLY, confidence: 0.5, status: "pending", customer_message: customerText, source_key: sourceKey, needs_human: true },
+      profile: "(fixed reply)",
+    };
+  }
+
   // very short names ("A", "$", "UM") are not unique, so their saved chat may belong to someone else: use no history
   const ambiguous = c.phone === c.name && c.name.replace(/[^\p{L}\p{N}]/gu, "").length < 4;
   const history = ambiguous ? [] : (await loadRecent(conv.id, 14)).map(messageLine).filter(Boolean);
@@ -119,16 +141,15 @@ async function draftFor(channel, c, playbook, profiles) {
   if (history.at(-1) === tail) history.pop();
   const dialogue = [...history, tail].join("\n");
 
-  const mediaOnly = !customerText || MEDIA_ONLY.test(customerText);
   const profile = findProfile(profiles, c.assignee);
   const prompt = `Chat so far (last line is the customer message to answer):\n${dialogue}`;
   let raw;
   for (let attempt = 1; ; attempt++) { // Claude occasionally answers in plain text instead of JSON: ask once more
-    try { raw = parseJson(await ask(draftSystem(playbook, profile), prompt, 1500)); break; } catch (err) { if (attempt >= 2) throw err; }
+    try { raw = parseJson(await ask(draftSystemBlocks(playbook, profile), prompt, 1500)); break; } catch (err) { if (attempt >= 2) throw err; }
   }
   const draftText = String(raw.draft_text ?? "").trim();
   if (!draftText) return { skipped: "AI gave an empty draft", conv };
-  const needsHuman = Boolean(raw.needs_human) || mediaOnly || risky(draftText, playbook);
+  const needsHuman = Boolean(raw.needs_human) || risky(draftText, playbook) || STOCK_QUESTION.test(customerText) || STOCK_CLAIM.test(draftText);
   return {
     conv,
     row: {
@@ -156,11 +177,18 @@ async function main() {
   if (!ROWS_ONLY && !playbook.length) throw new Error("the playbook is empty - run learn.mjs first");
   log(`model ${MODEL}${ROWS_ONLY ? " (rows only)" : DRY ? " (dry run - nothing saved)" : ""}`);
 
+  // daily limit on drafts (ai_settings.max_drafts_per_day, default 250) so the AI bill can never run away
+  const cap = Number(settings.find((s) => s.key === "max_drafts_per_day")?.value) || 250;
+  const dayStart = new Date(`${new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kuala_Lumpur" }).slice(0, 10)}T00:00:00+08:00`).toISOString();
+  const madeToday = DRY ? 0 : (await rest(`ai_drafts?created_at=gte.${dayStart}&select=id&limit=5000`)).length;
+  if (!ROWS_ONLY && madeToday >= cap) { log(`daily limit reached (${madeToday}/${cap} drafts today) - nothing to do`); return; }
+  const runLimit = Math.min(MAX_DRAFTS, cap - madeToday);
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: await loadStorageState(), viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
   let originalPhone = "";
-  const totals = { unread: 0, drafted: 0, skipped: 0, flagged: 0, expired: 0, errors: 0 };
+  const totals = { unread: 0, drafted: 0, skipped: 0, trivial: 0, flagged: 0, expired: 0, errors: 0 };
   let drafts = 0;
 
   try {
@@ -192,8 +220,9 @@ async function main() {
       }
 
       for (const c of rows) {
-        if (drafts >= MAX_DRAFTS) break;
+        if (drafts >= runLimit) break;
         if (!c.preview) { totals.skipped++; continue; }
+        if (isTrivial(c.preview)) { totals.trivial++; continue; }
         try {
           const out = await draftFor(ch, c, playbook, profiles);
           if (out.skipped) { totals.skipped++; continue; }
@@ -224,7 +253,8 @@ async function main() {
       }
     }
   } finally {
-    log("DONE", JSON.stringify(totals), `tokens ${usage.input} in / ${usage.output} out`);
+    log("DONE", JSON.stringify(totals), `tokens ${usage.input} in (+${usage.cacheRead} cached reads, ${usage.cacheWrite} cache writes) / ${usage.output} out`);
+    if (!DRY && !ROWS_ONLY && madeToday < cap && madeToday + drafts >= cap) await alertTelegram(`⚠️ AI Reply Desk: daily limit of ${cap} drafts reached - no more drafts today (change ai_settings.max_drafts_per_day)`);
     try { if (originalPhone) await withTimeout(switchChannel(page, originalPhone), 60_000, "switching back"); } catch { /* best effort */ }
     await browser.close().catch(() => {});
   }

@@ -51,7 +51,7 @@ export interface SalesChecklistInput {
   loanApproved: number;
   /** From the Stock Board loan note, null when not found */
   retention: number | null;
-  /** Total of the approved deposit payments */
+  /** Total of the approved deposit payments made by online transfer - cash payments are not counted */
   deposit: number;
   /** The car's Deposit Required on the Stock Board, null when not set. Paid above this is the staff's mark-up. */
   depositRequired: number | null;
@@ -64,6 +64,11 @@ export interface SalesChecklistInput {
   /** Invoice date, YYYY-MM-DD */
   signingDate: string;
   payments: ChecklistPayment[];
+}
+
+/** Only online payments (bank transfer, QR scan, e-wallet) count as deposit in the pricing; cash does not. */
+export function isOnlinePayment(method: string): boolean {
+  return method !== "Cash";
 }
 
 /** The checklist's Payment Method dropdown only has Cash / Transfer / DuitNow / Credit Card. */
@@ -208,15 +213,13 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
   wrapHeaderCells(sheet);
 
   // --- 8. Pricing details (internal)
-  const retention = input.retention ?? 0;
   const finalPrice = input.loanApproved + input.deposit; // + trade-in (staff) - excess refund (staff)
-  const actualPrice = finalPrice - retention;
+  const actualPrice = finalPrice; // Actual Price = Final Price OTR (retention is no longer deducted)
   sheet.getCell("D9").value = input.loanApproved;
   sheet.getCell("D10").value = input.retention;
   sheet.getCell("D11").value = input.deposit;
   sheet.getCell("D14").value = { formula: `D9+D11+D12-D${refundRow}`, result: finalPrice };
-  sheet.getCell("D16").value = { formula: "D10", result: retention };
-  sheet.getCell("D21").value = { formula: "D14-SUM(D16:D19)", result: actualPrice };
+  sheet.getCell("D21").value = { formula: "D14", result: actualPrice };
   sheet.getCell("D22").value = input.originalPrice;
   sheet.getCell("D23").value = {
     formula: 'IF(D22="","",D21-D22)',
@@ -234,8 +237,9 @@ export async function buildSalesChecklistWorkbook(input: SalesChecklistInput): P
   }
 
   // --- 9. Pricing details (customer)
-  // Car price = invoice selling price + the deposit actually paid; the invoice's Deposit Amount comes
-  // off as the discount, so FINAL PRICE OTR ends up as loan + deposit paid (same as the internal side).
+  // Car price = loan approved + online deposit + discount (= invoice selling price + online deposit); the
+  // invoice's Deposit Amount comes off as the discount, so FINAL PRICE OTR ends up as loan + online deposit
+  // (same as the internal side).
   const carPrice = input.sellingPrice + input.deposit;
   sheet.getCell("J9").value = carPrice;
   sheet.getCell("J14").value = input.invoiceDeposit;
@@ -356,7 +360,7 @@ export async function fetchSalesChecklistInput(
     phone: contact.phone,
     loanApproved: Number(invoice.loan_amount) || 0,
     retention,
-    deposit: payments.reduce((sum, p) => sum + p.amount, 0),
+    deposit: payments.filter((p) => isOnlinePayment(p.method)).reduce((sum, p) => sum + p.amount, 0),
     depositRequired: asNumber(car?.deposit),
     sellingPrice: Number(invoice.selling_price) || 0,
     invoiceDeposit: Number(invoice.deposit_amount) || 0,

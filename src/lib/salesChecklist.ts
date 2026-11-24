@@ -324,19 +324,34 @@ function asNumber(raw: unknown): number | null {
 }
 
 /** Everything the checklist needs for one claim invoice. */
+export interface ChecklistSharedData {
+  vehicles?: Awaited<ReturnType<typeof fetchStockBoardVehicles>>;
+  deposits?: Awaited<ReturnType<typeof fetchCarDeposits>>;
+}
+
+/** Loads the Stock Board and the deposits once, for callers that build many checklists / summary rows. */
+export async function loadChecklistSharedData(supabase: SupabaseClient): Promise<ChecklistSharedData> {
+  const [vehicles, deposits] = await Promise.all([
+    fetchStockBoardVehicles().catch(() => undefined), // Stock Board unreachable: rows fill what the invoice knows
+    fetchCarDeposits(supabase),
+  ]);
+  return { vehicles, deposits };
+}
+
 export async function fetchSalesChecklistInput(
   supabase: SupabaseClient,
-  invoice: ClaimInvoiceRow
+  invoice: ClaimInvoiceRow,
+  shared: ChecklistSharedData = {}
 ): Promise<SalesChecklistInput> {
   let car;
   try {
-    car = findByPlate(invoice.vehicle_no, await fetchStockBoardVehicles());
+    car = findByPlate(invoice.vehicle_no, shared.vehicles ?? (await fetchStockBoardVehicles()));
   } catch {
     car = undefined; // Stock Board unreachable: fill what the invoice itself knows
   }
 
   const plate = normalizePlate(invoice.vehicle_no);
-  const deposits = await fetchCarDeposits(supabase);
+  const deposits = shared.deposits ?? (await fetchCarDeposits(supabase));
   const payments = deposits
     .filter((d) => (car ? d.stock_board_vehicle_id === car.id : false) || normalizePlate(d.no_plate) === plate)
     .flatMap((d) => d.payments)

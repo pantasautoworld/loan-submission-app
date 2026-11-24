@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { ClaimInvoiceRow } from "@/lib/claimInvoices";
+import { CLAIM_COMPANY_NAMES, type ClaimInvoiceRow } from "@/lib/claimInvoices";
+import { malaysiaTodayIso } from "@/lib/timezone";
 import { removeInvoice } from "@/app/invoices/actions";
 
 interface Props {
@@ -22,6 +23,18 @@ function fmtDate(iso: string): string {
 
 export function InvoiceApp({ role, invoices }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [month, setMonth] = useState(malaysiaTodayIso().slice(0, 7));
+
+  const summaryHref = (format: "pdf" | "xlsx") => {
+    const q = new URLSearchParams({ format });
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    return `/api/invoices/summary?${q.toString()}`;
+  };
+
+  const monthHref = (format: "pdf" | "xlsx") => `/api/invoices/summary?format=${format}&month=${month}`;
 
   async function handleDelete(invoice: ClaimInvoiceRow) {
     if (!confirm(`Delete invoice ${invoice.invoice_no}? This cannot be undone.`)) return;
@@ -37,13 +50,72 @@ export function InvoiceApp({ role, invoices }: Props) {
 
   return (
     <div className="mx-auto max-w-[1100px] px-6 py-5">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <Link
           href="/invoices/new"
           className="inline-block rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
         >
           + New invoice
         </Link>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted">Month</label>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            />
+          </div>
+          {month && (
+            <>
+              <a
+                href={monthHref("pdf")}
+                className="rounded-[7px] bg-amber px-3 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
+              >
+                Month PDF
+              </a>
+              <a
+                href={monthHref("xlsx")}
+                className="rounded-[7px] bg-amber px-3 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"
+              >
+                Month Excel
+              </a>
+            </>
+          )}
+          <span className="mx-1 hidden h-8 w-px bg-line sm:block" />
+          <div>
+            <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted">Delivery from</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted">to</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            />
+          </div>
+          <a
+            href={summaryHref("pdf")}
+            className="rounded-[7px] border border-amber px-3 py-2 text-sm font-semibold text-amber hover:bg-panel-raised"
+          >
+            Summary PDF
+          </a>
+          <a
+            href={summaryHref("xlsx")}
+            className="rounded-[7px] border border-amber px-3 py-2 text-sm font-semibold text-amber hover:bg-panel-raised"
+          >
+            Summary Excel
+          </a>
+        </div>
       </div>
 
       {invoices.length === 0 ? (
@@ -62,6 +134,7 @@ export function InvoiceApp({ role, invoices }: Props) {
                 <th className="px-3 py-2.5">Selling Price</th>
                 <th className="px-3 py-2.5">Loan Amount (RM)</th>
                 <th className="px-3 py-2.5">Agent</th>
+                <th className="px-3 py-2.5">Company</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
             </thead>
@@ -77,6 +150,7 @@ export function InvoiceApp({ role, invoices }: Props) {
                   <td className="px-3 py-2.5 font-mono text-fg">{fmtMoney(inv.selling_price)}</td>
                   <td className="px-3 py-2.5 font-mono text-fg">{fmtMoney(inv.loan_amount)}</td>
                   <td className="px-3 py-2.5 text-muted">{inv.agent_name}</td>
+                  <td className="px-3 py-2.5 text-muted">{CLAIM_COMPANY_NAMES[inv.company] ?? inv.company}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-3">
                       <a

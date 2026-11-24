@@ -3,6 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** Every claim invoice goes through the same financier - not a per-invoice choice. */
 export const CLAIM_INVOICE_FINANCIER = "ELK-Desa Capital Sdn Bhd";
 
+/** The two companies that issue claim invoices (each has its own header, bank details and number series). */
+export const CLAIM_COMPANIES = ["KIWI", "PANTAS"] as const;
+export type ClaimCompany = (typeof CLAIM_COMPANIES)[number];
+export const CLAIM_COMPANY_NAMES: Record<ClaimCompany, string> = {
+  KIWI: "KIWI AUTOWORLD",
+  PANTAS: "PANTAS AUTOWORLD SDN BHD",
+};
+
 export interface ClaimInvoiceRow {
   id: string;
   invoice_no: string;
@@ -20,6 +28,8 @@ export interface ClaimInvoiceRow {
   loan_amount: number;
   deposit_amount: number;
   grant_path: string | null;
+  /** The company that issued the invoice - also the ELK panel it is claimed under. */
+  company: ClaimCompany;
   created_by: string | null;
   created_by_name: string;
   created_at: string;
@@ -54,6 +64,8 @@ export interface CreateClaimInvoiceInput {
   sellingPrice: number;
   loanAmount: number;
   depositAmount: number;
+  /** Defaults to KIWI (the Telegram flow does not ask). */
+  company?: ClaimCompany;
   createdByProfileId: string | null;
   createdByName: string;
 }
@@ -63,7 +75,8 @@ export async function createClaimInvoice(
   supabase: SupabaseClient,
   input: CreateClaimInvoiceInput
 ): Promise<ClaimInvoiceRow> {
-  const { data: invoiceNo, error: numError } = await supabase.rpc("assign_claim_invoice_no");
+  const company = input.company ?? "KIWI";
+  const { data: invoiceNo, error: numError } = await supabase.rpc("assign_claim_invoice_no", { p_company: company });
   if (numError || !invoiceNo) throw new Error(numError?.message ?? "Could not assign an invoice number");
 
   const { data, error } = await supabase
@@ -83,6 +96,7 @@ export async function createClaimInvoice(
       selling_price: input.sellingPrice,
       loan_amount: input.loanAmount,
       deposit_amount: input.depositAmount,
+      company,
       created_by: input.createdByProfileId,
       created_by_name: input.createdByName,
     })

@@ -1,14 +1,60 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ClaimInvoiceRow } from "@/lib/claimInvoices";
+import type { ClaimCompany, ClaimInvoiceRow } from "@/lib/claimInvoices";
 
 const PAGE_WIDTH = 595; // A4 @ 72dpi
 const PAGE_HEIGHT = 842;
 const MARGIN = 50;
 
-const LOGO_PATH = "templates/kiwi-logo.png";
-const CHOP_PATH = "templates/kiwi-chop.jpg";
+interface CompanyProfile {
+  logoPath: string;
+  logoWidth: number;
+  chopPath: string;
+  chopWidth: number;
+  /** A handwritten signature drawn over the chop's blank area (optional) */
+  signaturePath?: string;
+  name: string;
+  registration: string;
+  address: string;
+  phone: string;
+  email: string;
+  payee: string;
+  bankName: string;
+  bankAccountNo: string;
+}
+
+const COMPANY_PROFILES: Record<ClaimCompany, CompanyProfile> = {
+  KIWI: {
+    logoPath: "templates/kiwi-logo.png",
+    logoWidth: 62,
+    chopPath: "templates/kiwi-chop.jpg",
+    chopWidth: 150,
+    name: "KIWI AUTOWORLD",
+    registration: " (202503131310) (TR0321822-H)",
+    address: "LOT 21936, LOT I-2, Lorong Cinta Alam A, 43000 Kajang, Selangor",
+    phone: "016-2209393",
+    email: "kiwiautoworld@gmail.com",
+    payee: "KIWI AUTOWORLD",
+    bankName: "CIMB Bank Berhad",
+    bankAccountNo: "8606 151 922",
+  },
+  PANTAS: {
+    logoPath: "templates/pantas-logo.png",
+    logoWidth: 92,
+    chopPath: "templates/pantas-chop.jpg",
+    chopWidth: 230,
+    signaturePath: "templates/pantas-signature.png",
+    name: "PANTAS AUTOWORLD SDN BHD",
+    registration: " (1653858H / 202501052451)",
+    address: "C-06-03 Streetmall @ One South, Jalan OS, Seksyen 6, Taman Serdang Perdana, 43300 Seri Kembangan, Selangor",
+    phone: "016-2231988",
+    email: "pantasautoworld@gmail.com",
+    payee: "Pantas Autoworld Sdn Bhd",
+    bankName: "RHB Bank Berhad",
+    bankAccountNo: "2640 7600 039602",
+  },
+};
 
 function fmtMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -44,13 +90,17 @@ export async function buildClaimInvoicePdf(invoice: ClaimInvoiceRow): Promise<Bu
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const company = COMPANY_PROFILES[invoice.company] ?? COMPANY_PROFILES.KIWI;
 
   // templates/ is copied into the deploy image explicitly (see Dockerfile),
   // so we don't need/want Next's file tracer to bundle it into .next/standalone.
-  const logoBytes = await readFile(/* turbopackIgnore: true */ join(process.cwd(), LOGO_PATH));
-  const chopBytes = await readFile(/* turbopackIgnore: true */ join(process.cwd(), CHOP_PATH));
+  const logoBytes = await readFile(/* turbopackIgnore: true */ join(process.cwd(), company.logoPath));
+  const chopBytes = await readFile(/* turbopackIgnore: true */ join(process.cwd(), company.chopPath));
   const logoImage = await pdf.embedPng(logoBytes);
   const chopImage = await pdf.embedJpg(chopBytes);
+  const signatureImage = company.signaturePath
+    ? await pdf.embedPng(await readFile(/* turbopackIgnore: true */ join(process.cwd(), company.signaturePath)))
+    : null;
 
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let y = PAGE_HEIGHT - MARGIN;
@@ -60,30 +110,27 @@ export async function buildClaimInvoicePdf(invoice: ClaimInvoiceRow): Promise<Bu
   }
 
   // Logo (top-left) + company header text beside it
-  const logoWidth = 62;
+  const logoWidth = company.logoWidth;
   const logoHeight = (logoImage.height / logoImage.width) * logoWidth;
   page.drawImage(logoImage, { x: MARGIN, y: y - logoHeight, width: logoWidth, height: logoHeight });
 
   const textX = MARGIN + logoWidth + 12;
   let headerY = y;
-  page.drawText("KIWI AUTOWORLD", { x: textX, y: headerY, size: 13, font: bold });
-  page.drawText(" (202503131310) (TR0321822-H)", {
-    x: textX + bold.widthOfTextAtSize("KIWI AUTOWORLD", 13),
+  page.drawText(company.name, { x: textX, y: headerY, size: 13, font: bold });
+  page.drawText(company.registration, {
+    x: textX + bold.widthOfTextAtSize(company.name, 13),
     y: headerY,
     size: 10,
     font,
   });
   headerY -= 15;
-  page.drawText("LOT 21936, LOT I-2, Lorong Cinta Alam A, 43000 Kajang, Selangor", {
-    x: textX,
-    y: headerY,
-    size: 10,
-    font,
-  });
+  for (const addressLine of wrapText(company.address, PAGE_WIDTH - MARGIN - textX, font, 10)) {
+    page.drawText(addressLine, { x: textX, y: headerY, size: 10, font });
+    headerY -= 13;
+  }
+  page.drawText(`Phone: ${company.phone}`, { x: textX, y: headerY, size: 10, font });
   headerY -= 13;
-  page.drawText("Phone: 016-2209393", { x: textX, y: headerY, size: 10, font });
-  headerY -= 13;
-  page.drawText("E-mail: kiwiautoworld@gmail.com", { x: textX, y: headerY, size: 10, font });
+  page.drawText(`E-mail: ${company.email}`, { x: textX, y: headerY, size: 10, font });
 
   y = Math.min(y - logoHeight, headerY) - 16;
   line(MARGIN, y, PAGE_WIDTH - MARGIN);
@@ -173,9 +220,9 @@ export async function buildClaimInvoicePdf(invoice: ClaimInvoiceRow): Promise<Bu
   page.drawText("Notes :", { x: MARGIN, y, size: 10, font });
   y -= 15;
   const notes = [
-    "1. All cheques should be crossed and made payable to KIWI AUTOWORLD",
-    "2. Bank Account : CIMB Bank Berhad",
-    "   Account No. : 8606 151 922",
+    `1. All cheques should be crossed and made payable to ${company.payee}`,
+    `2. Bank Account : ${company.bankName}`,
+    `   Account No. : ${company.bankAccountNo}`,
     "3. Goods sold are neither returnable nor refundable.",
   ];
   for (const n of notes) {
@@ -188,9 +235,20 @@ export async function buildClaimInvoicePdf(invoice: ClaimInvoiceRow): Promise<Bu
   y -= 8;
 
   // Chop + signature stamp, replacing the old plain-text company sign-off
-  const chopWidth = 150;
+  const chopWidth = company.chopWidth;
   const chopHeight = (chopImage.height / chopImage.width) * chopWidth;
   page.drawImage(chopImage, { x: MARGIN, y: y - chopHeight, width: chopWidth, height: chopHeight });
+  if (signatureImage) {
+    // the signature sits in the chop's blank middle, just above its dotted bottom line
+    const sigHeight = chopHeight * 0.6;
+    const sigWidth = (signatureImage.width / signatureImage.height) * sigHeight;
+    page.drawImage(signatureImage, {
+      x: MARGIN + chopWidth * 0.17,
+      y: y - chopHeight + chopHeight * 0.04,
+      width: sigWidth,
+      height: sigHeight,
+    });
+  }
 
   const bytes = await pdf.save();
   return Buffer.from(bytes);

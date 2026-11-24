@@ -8,6 +8,8 @@ import {
   CLAIM_INVOICE_FINANCIER,
   createClaimInvoice,
   deleteClaimInvoice,
+  CLAIM_COMPANIES,
+  type ClaimCompany,
 } from "@/lib/claimInvoices";
 
 export async function createInvoice(formData: FormData) {
@@ -22,6 +24,8 @@ export async function createInvoice(formData: FormData) {
   const model = String(formData.get("model") ?? "").trim();
   const chassisNo = String(formData.get("chassisNo") ?? "").trim();
   const engineNo = String(formData.get("engineNo") ?? "").trim();
+  const companyRaw = String(formData.get("company") ?? "");
+  const company = (CLAIM_COMPANIES as readonly string[]).includes(companyRaw) ? (companyRaw as ClaimCompany) : null;
   const loanAmountRaw = Number(formData.get("loanAmount") ?? 0);
   const depositAmountRaw = Number(formData.get("depositAmount") ?? 0);
   const loanAmount = Number.isFinite(loanAmountRaw) ? loanAmountRaw : 0;
@@ -29,6 +33,7 @@ export async function createInvoice(formData: FormData) {
   // Selling price is never entered directly - it's always the sum of the loan and deposit.
   const sellingPrice = loanAmount + depositAmount;
 
+  if (!company) throw new Error("Choose the company issuing the invoice.");
   if (!invoiceDate) throw new Error("Pick the invoice date (car delivery date).");
   if (!buyerName) throw new Error("Enter the buyer's name.");
   if (!vehicleNo) throw new Error("Enter the vehicle number.");
@@ -48,6 +53,7 @@ export async function createInvoice(formData: FormData) {
     sellingPrice,
     loanAmount,
     depositAmount,
+    company,
     createdByProfileId: profile.id,
     createdByName: profile.full_name || "Staff",
   });

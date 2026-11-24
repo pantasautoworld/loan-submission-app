@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createInvoice } from "@/app/invoices/actions";
 import { malaysiaTodayIso } from "@/lib/timezone";
+import { CLAIM_COMPANIES, CLAIM_COMPANY_NAMES } from "@/lib/claimInvoices";
 
 const FIELD =
   "w-full rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber mb-3";
@@ -29,6 +30,7 @@ export function NewInvoiceForm({ staffName }: Props) {
   const [term, setTerm] = useState<"Loan" | "Cash">("Loan");
   const [loanAmount, setLoanAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const [company, setCompany] = useState("");
   const sellingPrice = (Number(loanAmount) || 0) + (Number(depositAmount) || 0);
 
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,10 @@ export function NewInvoiceForm({ staffName }: Props) {
   }
 
   async function handleSubmit() {
+    if (!company) {
+      setError("Choose the company issuing the invoice.");
+      return;
+    }
     if (!invoiceDate) {
       setError("Pick the invoice date (car delivery date).");
       return;
@@ -92,6 +98,7 @@ export function NewInvoiceForm({ staffName }: Props) {
       formData.set("engineNo", engineNo.trim());
       formData.set("loanAmount", loanAmount || "0");
       formData.set("depositAmount", depositAmount || "0");
+      formData.set("company", company);
       if (grantFile) formData.set("grant", grantFile);
       await createInvoice(formData);
       // createInvoice redirects to /invoices on success - nothing else to do here.
@@ -161,6 +168,16 @@ export function NewInvoiceForm({ staffName }: Props) {
         />
 
         <h2 className="font-display mb-3 mt-5 text-lg font-semibold text-fg">3. Sale &amp; finance</h2>
+
+        <label className={LABEL}>Company issuing the invoice</label>
+        <select className={FIELD} value={company} onChange={(e) => setCompany(e.target.value)}>
+          <option value="">Choose a company…</option>
+          {CLAIM_COMPANIES.map((c) => (
+            <option key={c} value={c}>
+              {CLAIM_COMPANY_NAMES[c]}
+            </option>
+          ))}
+        </select>
 
         <label className={LABEL}>Invoice date (car delivery date)</label>
         <input

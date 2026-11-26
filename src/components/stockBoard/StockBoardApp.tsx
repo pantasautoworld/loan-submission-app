@@ -531,21 +531,27 @@ export function StockBoardApp({
                   </div>
                   <div className="flex flex-wrap gap-3.5 text-sm">
                     <div>
-                      <span className="block text-[10px] uppercase tracking-wide text-muted">ELK Loan Amount</span>
+                      <span className="block text-[10px] uppercase tracking-wide text-muted">
+                        {loanExtras ? "ELK Loan Amount" : "Cash Price"}
+                      </span>
                       <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.price)}</span>
                     </div>
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide text-muted">Monthly Installment</span>
-                      <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.cost)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Required</span>
-                      <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.deposit)}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] uppercase tracking-wide text-muted">Tahun</span>
-                      <span className="font-mono text-base font-semibold text-fg">{v.tahun || "—"}</span>
-                    </div>
+                    {loanExtras && (
+                      <>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide text-muted">Monthly Installment</span>
+                          <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.cost)}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide text-muted">Deposit Required</span>
+                          <span className="font-mono text-base font-semibold text-fg">{fmtMoney(v.deposit)}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wide text-muted">Tahun</span>
+                          <span className="font-mono text-base font-semibold text-fg">{v.tahun || "—"}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                   {v.notes && <div className="mt-2.5 text-sm italic text-muted">&quot;{v.notes}&quot;</div>}
                   <div className="mt-2.5 border-t border-dashed border-line pt-2 text-[11px] text-muted">

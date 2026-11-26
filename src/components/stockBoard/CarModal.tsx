@@ -233,22 +233,32 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
           placeholder="e.g. 2022 Toyota Camry"
         />
 
-        <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label className={LABEL}>ELK Loan Amount</label>
+        {board === "cash" ? (
+          // Stock Board (Cash): only a cash price (kept in the same "price" field as the loan amount)
+          <>
+            <label className={LABEL}>Cash Price</label>
             <input type="number" className={FIELD} value={price} onChange={(e) => setPrice(e.target.value)} />
-          </div>
-          <div>
-            <label className={LABEL}>Monthly Installment</label>
-            <input type="number" className={FIELD} value={cost} onChange={(e) => setCost(e.target.value)} />
-          </div>
-        </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className={LABEL}>ELK Loan Amount</label>
+                <input type="number" className={FIELD} value={price} onChange={(e) => setPrice(e.target.value)} />
+              </div>
+              <div>
+                <label className={LABEL}>Monthly Installment</label>
+                <input type="number" className={FIELD} value={cost} onChange={(e) => setCost(e.target.value)} />
+              </div>
+            </div>
 
-        <label className={LABEL}>Deposit Required</label>
-        <input type="number" className={FIELD} value={deposit} onChange={(e) => setDeposit(e.target.value)} />
+            <label className={LABEL}>Deposit Required</label>
+            <input type="number" className={FIELD} value={deposit} onChange={(e) => setDeposit(e.target.value)} />
 
-        <label className={LABEL}>Tahun</label>
-        <input type="number" className={FIELD} value={tahun} onChange={(e) => setTahun(e.target.value)} />
+            <label className={LABEL}>Tahun</label>
+            <input type="number" className={FIELD} value={tahun} onChange={(e) => setTahun(e.target.value)} />
+          </>
+        )}
 
         <div className="grid grid-cols-2 gap-2.5">
           <div>

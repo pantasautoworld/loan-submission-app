@@ -13,6 +13,8 @@ const STATUS_LABEL: Record<string, string> = {
   reserved: "Loan Approved",
   sold: "Sold",
 };
+/** Stock Board (Cash): no loan submission step, and "reserved" means the buyer's booking is paid. */
+const CASH_STATUS_LABEL: Record<string, string> = { ...STATUS_LABEL, reserved: "Booking Paid" };
 const STATUS_BG: Record<string, string> = {
   prep: "bg-status-prep",
   available: "bg-status-available",
@@ -116,6 +118,7 @@ export function StockBoardApp({
   const boardInfo = STOCK_BOARDS[board];
   // Deposits, Puspakom and recon locations are tracked for the main Stock Board's cars only.
   const loanExtras = board === "main";
+  const statusLabel = loanExtras ? STATUS_LABEL : CASH_STATUS_LABEL;
 
   const load = useCallback(async () => {
     try {
@@ -272,11 +275,11 @@ export function StockBoardApp({
       type: "status" as const,
     },
     { label: "Available", value: stats.available, key: "available", type: "status" as const },
-    { label: "Loan approved", value: stats.reserved, key: "reserved", type: "status" as const },
+    { label: loanExtras ? "Loan approved" : "Booking paid", value: stats.reserved, key: "reserved", type: "status" as const },
     { label: "Deposit received", value: depositReceivedCount, key: "received", type: "deposit" as const },
     { label: "Loan submission", value: stats.prep, key: "prep", type: "status" as const },
     { label: "Sold", value: stats.sold, key: "sold", type: "status" as const },
-  ].filter((s) => loanExtras || s.type !== "deposit");
+  ].filter((s) => loanExtras || (s.type !== "deposit" && s.key !== "prep"));
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-5">
@@ -482,7 +485,7 @@ export function StockBoardApp({
                         STATUS_BG[v.status] ?? "bg-line"
                       }`}
                     >
-                      {STATUS_LABEL[v.status] ?? v.status}
+                      {statusLabel[v.status] ?? v.status}
                     </span>
                     {(depositFullyPaid || depositPending) && (
                       <span
@@ -519,7 +522,9 @@ export function StockBoardApp({
                     )}
                     {aging && (
                       <span className={`rounded-full border px-2.5 py-0.5 font-mono text-[11px] ${AGING_CLASS[aging.level]}`}>
-                        Approved {fmtDateShort(v.approvalDate)} · {aging.text}
+                        {loanExtras
+                          ? `Approved ${fmtDateShort(v.approvalDate)} · ${aging.text}`
+                          : `Booking paid ${fmtDateShort(v.approvalDate)} · ${aging.text.replace("Approved today", "today")}`}
                       </span>
                     )}
                     {showSubmittedBy && (

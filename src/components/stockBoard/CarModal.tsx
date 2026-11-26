@@ -29,6 +29,12 @@ const STATUS_OPTIONS: { value: StockBoardVehicle["status"]; label: string }[] = 
   { value: "reserved", label: "Loan Approved" },
   { value: "sold", label: "Sold" },
 ];
+/** Stock Board (Cash): no loan submission step, and "reserved" means the buyer's booking is paid. */
+const CASH_STATUS_OPTIONS: typeof STATUS_OPTIONS = [
+  { value: "available", label: "Available" },
+  { value: "reserved", label: "Booking Paid" },
+  { value: "sold", label: "Sold" },
+];
 
 interface Props {
   /** The board the car is on (separate car lists). */
@@ -48,7 +54,8 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
   const [cost, setCost] = useState(vehicle?.cost ?? "");
   const [deposit, setDeposit] = useState(vehicle?.deposit ?? "");
   const [tahun, setTahun] = useState(vehicle?.tahun ?? "");
-  const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? "prep");
+  const isCash = board === "cash";
+  const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? (isCash ? "available" : "prep"));
   const [notes, setNotes] = useState(vehicle?.notes ?? "");
   // a new car on a one-company board (Stock Board (Cash) = SUNSHINE) starts with that company
   const [company, setCompany] = useState(vehicle?.company ?? (companies.length === 1 ? companies[0] : ""));
@@ -291,7 +298,13 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
           value={status}
           onChange={(e) => handleStatusChange(e.target.value as StockBoardVehicle["status"])}
         >
-          {STATUS_OPTIONS.map((o) => (
+          {(isCash
+            ? // keep an older car's current status selectable even if the cash board no longer offers it
+              STATUS_OPTIONS.filter((o) => CASH_STATUS_OPTIONS.some((c) => c.value === o.value) || o.value === status).map(
+                (o) => CASH_STATUS_OPTIONS.find((c) => c.value === o.value) ?? o
+              )
+            : STATUS_OPTIONS
+          ).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -321,7 +334,7 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
 
         {status === "reserved" && (
           <>
-            <label className={LABEL}>Approval date</label>
+            <label className={LABEL}>{isCash ? "Booking paid date" : "Approval date"}</label>
             <input
               type="date"
               className={FIELD}

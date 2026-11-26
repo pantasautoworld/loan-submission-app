@@ -44,6 +44,14 @@ export const BROKER_FIELDS: Record<string, BrokerFieldDef> = {
   notes: { label: "Notes", numeric: false, internal: true, get: (v) => v.notes ?? "" },
 };
 
+/** How one of your own columns is shown: plain text, a money amount, or a link (e.g. a photo album). */
+export type CustomColumnFormat = "text" | "money" | "link";
+export const CUSTOM_FORMAT_LABEL: Record<CustomColumnFormat, string> = {
+  text: "Text",
+  money: "Money (RM)",
+  link: "Link (e.g. photos)",
+};
+
 export interface BrokerSheetColumn {
   id: string;
   label: string;
@@ -51,6 +59,33 @@ export interface BrokerSheetColumn {
   field: string | null;
   position: number;
   visible: boolean;
+  format: CustomColumnFormat;
+}
+
+/** Only http(s) links are ever shown to brokers as clickable. */
+export function safeLink(value: string): string | null {
+  return /^https?:\/\/[^\s]+$/i.test(value.trim()) ? value.trim() : null;
+}
+
+/**
+ * Cleans what an admin typed into one of their own columns:
+ * money "RM 3,500" -> "3500" (a plain number so Excel adds it up); link "drive.google.com/x" -> "https://drive.google.com/x".
+ */
+export function normalizeCustomValue(
+  format: CustomColumnFormat,
+  raw: string
+): { ok: true; value: string } | { ok: false; error: string } {
+  const v = raw.trim();
+  if (!v) return { ok: true, value: "" };
+  if (format === "money") {
+    const n = Number(v.replace(/^rm\s*/i, "").replace(/,/g, "").trim());
+    return Number.isFinite(n) ? { ok: true, value: String(n) } : { ok: false, error: `"${v}" is not an amount.` };
+  }
+  if (format === "link") {
+    const url = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+    return safeLink(url) ? { ok: true, value: url } : { ok: false, error: `"${v}" is not a web link.` };
+  }
+  return { ok: true, value: v };
 }
 
 export interface BrokerSheetSettings {
@@ -73,7 +108,7 @@ export interface BrokerRow {
 /** What a broker sees: already filtered, ordered and formatted. */
 export interface BrokerSheetData {
   title: string;
-  columns: { label: string; numeric: boolean }[];
+  columns: { label: string; numeric: boolean; link: boolean }[];
   rows: string[][];
   generatedAt: string;
 }

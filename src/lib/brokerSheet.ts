@@ -17,7 +17,11 @@ export async function loadBrokerSheetConfig(
 ): Promise<{ settings: BrokerSheetSettings; columns: BrokerSheetColumn[] }> {
   const [settingsRes, columnsRes] = await Promise.all([
     supabase.from("broker_sheet_settings").select("title, statuses").eq("id", 1).maybeSingle(),
-    supabase.from("broker_sheet_columns").select("id, label, kind, field, position, visible").order("position").order("created_at"),
+    supabase
+      .from("broker_sheet_columns")
+      .select("id, label, kind, field, position, visible, format")
+      .order("position")
+      .order("created_at"),
   ]);
   if (columnsRes.error) throw new Error(`Broker sheet columns: ${columnsRes.error.message}`);
   return {
@@ -59,7 +63,8 @@ export async function buildBrokerSheet(supabase: SupabaseClient): Promise<Broker
     title: settings.title || "Stock List",
     columns: shown.map((c) => ({
       label: c.label,
-      numeric: c.kind === "field" && !!BROKER_FIELDS[c.field!]?.numeric,
+      numeric: c.kind === "field" ? !!BROKER_FIELDS[c.field!]?.numeric : c.format === "money",
+      link: c.kind === "custom" && c.format === "link",
     })),
     rows,
     generatedAt: new Date().toISOString(),

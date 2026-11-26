@@ -3,7 +3,13 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { BROKER_FIELDS, STOCK_STATUSES } from "@/lib/brokerSheetShared";
+import {
+  BROKER_FIELDS,
+  CUSTOM_FORMAT_LABEL,
+  STOCK_STATUSES,
+  normalizeCustomValue,
+  type CustomColumnFormat,
+} from "@/lib/brokerSheetShared";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -73,7 +79,11 @@ export async function saveSheetSettingsAction(title: string, statuses: string[])
   return done(error);
 }
 
-export async function addColumnAction(kind: "field" | "custom", fieldOrLabel: string): Promise<Result> {
+export async function addColumnAction(
+  kind: "field" | "custom",
+  fieldOrLabel: string,
+  format: CustomColumnFormat = "text"
+): Promise<Result> {
   const { supabase } = await requireAdmin();
   const { data: last } = await supabase
     .from("broker_sheet_columns")
@@ -92,20 +102,28 @@ export async function addColumnAction(kind: "field" | "custom", fieldOrLabel: st
     return done(error?.code === "23505" ? { message: "That field is already a column." } : error);
   }
   if (!fieldOrLabel.trim()) return { ok: false, error: "Enter a name for the new column." };
+  if (!(format in CUSTOM_FORMAT_LABEL)) return { ok: false, error: "Unknown column type." };
   const { error } = await supabase
     .from("broker_sheet_columns")
-    .insert({ label: fieldOrLabel.trim(), kind: "custom", field: null, position, visible: true });
+    .insert({ label: fieldOrLabel.trim(), kind: "custom", field: null, position, visible: true, format });
   return done(error);
 }
 
-export async function updateColumnAction(id: string, patch: { label?: string; visible?: boolean }): Promise<Result> {
+export async function updateColumnAction(
+  id: string,
+  patch: { label?: string; visible?: boolean; format?: CustomColumnFormat }
+): Promise<Result> {
   const { supabase } = await requireAdmin();
-  const update: { label?: string; visible?: boolean } = {};
+  const update: { label?: string; visible?: boolean; format?: CustomColumnFormat } = {};
   if (patch.label !== undefined) {
     if (!patch.label.trim()) return { ok: false, error: "Column name can't be empty." };
     update.label = patch.label.trim();
   }
   if (patch.visible !== undefined) update.visible = patch.visible;
+  if (patch.format !== undefined) {
+    if (!(patch.format in CUSTOM_FORMAT_LABEL)) return { ok: false, error: "Unknown column type." };
+    update.format = patch.format;
+  }
   const { error } = await supabase.from("broker_sheet_columns").update(update).eq("id", id);
   return done(error);
 }
@@ -126,19 +144,73 @@ export async function deleteColumnAction(id: string): Promise<Result> {
   return done(error);
 }
 
-/** One cell of a custom column for one car; empty clears it. */
-export async function setCustomValueAction(columnId: string, vehicleId: string, value: string): Promise<Result> {
+export interface CellInput {
+  columnId: string;
+  vehicleId: string;
+  value: string;
+}
+
+export type CellResult = CellInput & ({ ok: true } | { ok: false; error: string });
+
+/**
+ * Saves cells of your own columns (one typed cell, or a block pasted from Excel). Each value is
+ * cleaned for its column type - "RM 3,500" becomes 3500, a link gets https:// - and an empty
+ * value clears the cell. Returns every cell with its saved value or why it was rejected.
+ */
+export async function setCustomValuesAction(cells: CellInput[]): Promise<CellResult[]> {
   const { supabase, profile } = await requireAdmin();
-  const v = value.trim();
-  const { error } = v
-    ? await supabase.from("broker_sheet_values").upsert({
-        column_id: columnId,
-        vehicle_id: vehicleId,
-        value: v,
-        updated_at: new Date().toISOString(),
-        updated_by: profile.full_name ?? "",
-      })
-    : await supabase.from("broker_sheet_values").delete().eq("column_id", columnId).eq("vehicle_id", vehicleId);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true }; // no revalidate: the input already shows the new value
+  if (cells.length === 0) return [];
+  if (cells.length > 2000) return cells.map((c) => ({ ...c, ok: false, error: "Too many cells at once." }));
+
+  const { data: cols, error: colErr } = await supabase
+    .from("broker_sheet_columns")
+    .select("id, format")
+    .eq("kind", "custom")
+    .in("id", [...new Set(cells.map((c) => c.columnId))]);
+  if (colErr) return cells.map((c) => ({ ...c, ok: false, error: colErr.message }));
+  const formatOf = new Map((cols ?? []).map((c) => [c.id as string, c.format as CustomColumnFormat]));
+
+  const results: CellResult[] = [];
+  const upserts: { column_id: string; vehicle_id: string; value: string; updated_at: string; updated_by: string }[] = [];
+  const clears: CellInput[] = [];
+  const now = new Date().toISOString();
+  for (const c of cells) {
+    const format = formatOf.get(c.columnId);
+    if (!format) {
+      results.push({ ...c, ok: false, error: "That column no longer exists." });
+      continue;
+    }
+    const cleaned = normalizeCustomValue(format, c.value);
+    if (!cleaned.ok) {
+      results.push({ ...c, ok: false, error: cleaned.error });
+      continue;
+    }
+    const cell = { ...c, value: cleaned.value };
+    if (cleaned.value) {
+      upserts.push({ column_id: c.columnId, vehicle_id: c.vehicleId, value: cleaned.value, updated_at: now, updated_by: profile.full_name ?? "" });
+    } else {
+      clears.push(cell);
+    }
+    results.push({ ...cell, ok: true });
+  }
+
+  // cell key -> database error, for cells that passed checks but failed to save
+  const dbErrors = new Map<string, string>();
+  if (upserts.length) {
+    const { error } = await supabase.from("broker_sheet_values").upsert(upserts);
+    if (error) upserts.forEach((u) => dbErrors.set(`${u.column_id}|${u.vehicle_id}`, error.message));
+  }
+  for (const c of clears) {
+    const { error } = await supabase
+      .from("broker_sheet_values")
+      .delete()
+      .eq("column_id", c.columnId)
+      .eq("vehicle_id", c.vehicleId);
+    if (error) dbErrors.set(`${c.columnId}|${c.vehicleId}`, error.message);
+  }
+  // no revalidate: the inputs already show the new values
+  return results.map((r) => {
+    const err = dbErrors.get(`${r.columnId}|${r.vehicleId}`);
+    return err ? { ...r, ok: false, error: err } : r;
+  });
 }

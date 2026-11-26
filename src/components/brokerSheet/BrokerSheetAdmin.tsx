@@ -10,17 +10,22 @@ import {
   reorderColumnsAction,
   saveSheetSettingsAction,
   setBrokerActiveAction,
-  setCustomValueAction,
+  setCustomValuesAction,
   updateBrokerAction,
   updateColumnAction,
+  type CellInput,
+  type CellResult,
 } from "@/app/broker-sheet/actions";
 import {
   BROKER_FIELDS,
+  CUSTOM_FORMAT_LABEL,
   STOCK_STATUSES,
   STOCK_STATUS_LABEL,
+  safeLink,
   type BrokerRow,
   type BrokerSheetColumn,
   type BrokerSheetSettings,
+  type CustomColumnFormat,
 } from "@/lib/brokerSheetShared";
 
 export interface AdminCar {
@@ -28,7 +33,15 @@ export interface AdminCar {
   plate: string;
   vehicle: string;
   status: string;
+  /** Stock Board figures, shown for reference next to your own columns. */
+  loan: string;
+  deposit: string;
 }
+
+const fmtRef = (v: string) => {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return v && Number.isFinite(n) ? n.toLocaleString("en-MY") : "—";
+};
 
 interface Props {
   brokers: BrokerRow[];
@@ -95,6 +108,7 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
   // ---------- Columns ----------
   const [addChoice, setAddChoice] = useState("");
   const [customLabel, setCustomLabel] = useState("");
+  const [customFormat, setCustomFormat] = useState<CustomColumnFormat>("text");
   const usedFields = new Set(columns.map((c) => c.field).filter(Boolean));
   const unusedFields = Object.entries(BROKER_FIELDS).filter(([key]) => !usedFields.has(key));
 
@@ -108,10 +122,15 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
 
   // ---------- Custom values ----------
   const customColumns = columns.filter((c) => c.kind === "custom");
+  // What each cell shows (being typed) and what was last saved, keyed "columnId|vehicleId".
   const [cellValues, setCellValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(values.map((v) => [`${v.column_id}|${v.vehicle_id}`, v.value]))
   );
-  const [savedCells, setSavedCells] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const [savedValues, setSavedValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(values.map((v) => [`${v.column_id}|${v.vehicle_id}`, v.value]))
+  );
+  const [cellState, setCellState] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [carSearch, setCarSearch] = useState("");
   const shownCars = useMemo(() => {
     const q = carSearch.trim().toLowerCase();
@@ -120,14 +139,76 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
       .filter((c) => !q || c.plate.toLowerCase().includes(q) || c.vehicle.toLowerCase().includes(q));
   }, [cars, carSearch, settings.statuses]);
 
-  async function saveCell(columnId: string, vehicleId: string, value: string) {
+  /** Saves cells (one typed cell or a pasted block) and shows each one's result. */
+  async function saveCells(cells: CellInput[]): Promise<CellResult[]> {
+    if (cells.length === 0) return [];
+    const keys = cells.map((c) => `${c.columnId}|${c.vehicleId}`);
+    setCellState((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [k, "saving" as const])) }));
+    let results: CellResult[];
+    try {
+      results = await setCustomValuesAction(cells);
+    } catch {
+      results = cells.map((c) => ({ ...c, ok: false, error: "Could not save - check your connection." }));
+    }
+    const nextState: Record<string, "saved" | "error"> = {};
+    const saved: Record<string, string> = {};
+    for (const r of results) {
+      const k = `${r.columnId}|${r.vehicleId}`;
+      nextState[k] = r.ok ? "saved" : "error";
+      if (r.ok) saved[k] = r.value;
+    }
+    setCellState((s) => ({ ...s, ...nextState }));
+    setSavedValues((m) => ({ ...m, ...saved }));
+    setCellValues((m) => ({ ...m, ...saved })); // show the cleaned value, e.g. "RM 3,500" -> 3500
+    const firstError = results.find((r) => !r.ok);
+    if (firstError && !firstError.ok) setError(firstError.error);
+    return results;
+  }
+
+  function saveCell(columnId: string, vehicleId: string, value: string) {
     const k = `${columnId}|${vehicleId}`;
-    const before = values.find((v) => v.column_id === columnId && v.vehicle_id === vehicleId)?.value ?? "";
-    if (value.trim() === before && savedCells[k] === undefined) return;
-    setSavedCells((s) => ({ ...s, [k]: "saving" }));
-    const result = await setCustomValueAction(columnId, vehicleId, value);
-    setSavedCells((s) => ({ ...s, [k]: result.ok ? "saved" : "error" }));
-    if (!result.ok) setError(result.error);
+    if (value.trim() === (savedValues[k] ?? "") && cellState[k] !== "error") return;
+    void saveCells([{ columnId, vehicleId, value }]);
+  }
+
+  /** Paste from Excel: fills down (and right) from the cell you pasted into, one car per row. */
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) {
+    const text = e.clipboardData.getData("text/plain");
+    if (!/[\t\r\n]/.test(text.replace(/[\r\n]+$/, ""))) return; // a single value: let the input paste it normally
+    e.preventDefault();
+    const lines = text.replace(/[\r\n]+$/, "").split(/\r?\n/);
+    const cells: CellInput[] = [];
+    lines.forEach((line, i) => {
+      const car = shownCars[rowIndex + i];
+      if (!car) return;
+      line.split("\t").forEach((value, j) => {
+        const column = customColumns[colIndex + j];
+        if (column) cells.push({ columnId: column.id, vehicleId: car.id, value });
+      });
+    });
+    setCellValues((m) => ({ ...m, ...Object.fromEntries(cells.map((c) => [`${c.columnId}|${c.vehicleId}`, c.value.trim()])) }));
+    const skipped = Math.max(0, rowIndex + lines.length - shownCars.length);
+    setPasteNote(null);
+    void saveCells(cells).then((results) => {
+      const bad = results.filter((r) => !r.ok).length;
+      setPasteNote(
+        `Pasted ${results.length - bad} cell${results.length - bad === 1 ? "" : "s"}` +
+          (bad ? `, ${bad} not saved (marked red)` : "") +
+          (skipped ? `; ${skipped} row${skipped === 1 ? "" : "s"} went past the last car and were ignored` : "") +
+          "."
+      );
+    });
+  }
+
+  /** Enter moves down to the same column on the next car, like Excel. */
+  function handleCellKey(e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const next = document.querySelector<HTMLInputElement>(
+      `[data-cell="${rowIndex + (e.shiftKey ? -1 : 1)}-${colIndex}"]`
+    );
+    if (next) next.focus();
+    else e.currentTarget.blur();
   }
 
   return (
@@ -323,10 +404,28 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
                     if (e.target.value.trim() !== c.label) run(() => updateColumnAction(c.id, { label: e.target.value }));
                   }}
                 />
-                <span className="w-44 text-xs text-muted">
-                  {c.kind === "custom" ? "Your column (fill per car below)" : `Stock Board: ${def?.label ?? c.field}`}
-                  {def?.internal && <span className="ml-1 text-danger">internal</span>}
-                </span>
+                {c.kind === "custom" ? (
+                  <label className="flex w-52 items-center gap-1.5 text-xs text-muted">
+                    Your column:
+                    <select
+                      className={`${INPUT} py-1 text-xs`}
+                      value={c.format}
+                      disabled={isPending}
+                      onChange={(e) => run(() => updateColumnAction(c.id, { format: e.target.value as CustomColumnFormat }))}
+                    >
+                      {Object.entries(CUSTOM_FORMAT_LABEL).map(([f, label]) => (
+                        <option key={f} value={f}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <span className="w-52 text-xs text-muted">
+                    Stock Board: {def?.label ?? c.field}
+                    {def?.internal && <span className="ml-1 text-danger">internal</span>}
+                  </span>
+                )}
                 <label className="flex items-center gap-1.5 text-sm text-fg">
                   <input
                     type="checkbox"
@@ -363,12 +462,25 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
             ))}
           </select>
           {addChoice === "__custom" && (
-            <input
-              className={INPUT}
-              placeholder="Column name"
-              value={customLabel}
-              onChange={(e) => setCustomLabel(e.target.value)}
-            />
+            <>
+              <input
+                className={INPUT}
+                placeholder="Column name"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+              />
+              <select
+                className={INPUT}
+                value={customFormat}
+                onChange={(e) => setCustomFormat(e.target.value as CustomColumnFormat)}
+              >
+                {Object.entries(CUSTOM_FORMAT_LABEL).map(([f, label]) => (
+                  <option key={f} value={f}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
           <button
             className="rounded-[7px] bg-amber px-4 py-1.5 text-sm font-semibold text-amber-fg hover:brightness-110 disabled:opacity-40"
@@ -377,11 +489,12 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
               run(async () => {
                 const r =
                   addChoice === "__custom"
-                    ? await addColumnAction("custom", customLabel)
+                    ? await addColumnAction("custom", customLabel, customFormat)
                     : await addColumnAction("field", addChoice);
                 if (r.ok) {
                   setAddChoice("");
                   setCustomLabel("");
+                  setCustomFormat("text");
                 }
                 return r;
               })
@@ -397,8 +510,11 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
         <section className={CARD}>
           <h2 className={H2}>Your columns, per car</h2>
           <p className="mb-3 text-xs text-muted">
-            Type a value and click away to save. Showing cars in the statuses brokers see. Sold cars drop off automatically.
+            Type a value and press Enter or click away to save (Enter moves down to the next car). To fill many at once, copy
+            a column from Excel and paste it into the first car&apos;s cell. Showing cars in the statuses brokers see; sold
+            cars drop off automatically. Stock Board loan and deposit are shown in grey for reference.
           </p>
+          {pasteNote && <p className="mb-3 text-xs text-success">{pasteNote}</p>}
           <input
             type="search"
             className={`${INPUT} mb-3 w-full`}
@@ -413,8 +529,10 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
                   <th className="px-2 py-1.5 font-medium">Plate</th>
                   <th className="px-2 py-1.5 font-medium">Car</th>
                   <th className="px-2 py-1.5 font-medium">Status</th>
+                  <th className="px-2 py-1.5 text-right font-medium">SB loan</th>
+                  <th className="px-2 py-1.5 text-right font-medium">SB deposit</th>
                   {customColumns.map((c) => (
-                    <th key={c.id} className="px-2 py-1.5 font-medium">
+                    <th key={c.id} className={`px-2 py-1.5 font-medium ${c.format === "money" ? "text-right" : ""}`}>
                       {c.label}
                       {!c.visible && <span className="ml-1 normal-case text-danger">(hidden)</span>}
                     </th>
@@ -422,30 +540,47 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
                 </tr>
               </thead>
               <tbody>
-                {shownCars.map((car) => (
+                {shownCars.map((car, rowIndex) => (
                   <tr key={car.id} className="border-t border-line">
-                    <td className="px-2 py-1.5 font-mono font-semibold text-fg">{car.plate}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5 font-mono font-semibold text-fg">{car.plate}</td>
                     <td className="px-2 py-1.5 text-fg">{car.vehicle}</td>
                     <td className="px-2 py-1.5 text-xs text-muted">{STOCK_STATUS_LABEL[car.status] ?? car.status}</td>
-                    {customColumns.map((c) => {
+                    <td className="px-2 py-1.5 text-right font-mono text-xs text-muted">{fmtRef(car.loan)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-xs text-muted">{fmtRef(car.deposit)}</td>
+                    {customColumns.map((c, colIndex) => {
                       const k = `${c.id}|${car.id}`;
-                      const state = savedCells[k];
+                      const state = cellState[k];
+                      const link = c.format === "link" ? safeLink(cellValues[k] ?? "") : null;
                       return (
                         <td key={c.id} className="px-2 py-1">
-                          <input
-                            className={`${INPUT} w-full min-w-[120px] ${state === "error" ? "border-danger" : state === "saved" ? "border-success" : ""}`}
-                            value={cellValues[k] ?? ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCellValues((m) => ({ ...m, [k]: val }));
-                              setSavedCells((s) => {
-                                const next = { ...s };
-                                delete next[k];
-                                return next;
-                              });
-                            }}
-                            onBlur={(e) => saveCell(c.id, car.id, e.target.value)}
-                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              data-cell={`${rowIndex}-${colIndex}`}
+                              inputMode={c.format === "money" ? "decimal" : undefined}
+                              placeholder={c.format === "link" ? "https://…" : ""}
+                              className={`${INPUT} w-full ${c.format === "money" ? "min-w-[100px] text-right font-mono" : "min-w-[140px]"} ${
+                                state === "error" ? "border-danger" : state === "saved" ? "border-success" : ""
+                              }`}
+                              value={cellValues[k] ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCellValues((m) => ({ ...m, [k]: val }));
+                                setCellState((s) => {
+                                  const next = { ...s };
+                                  delete next[k];
+                                  return next;
+                                });
+                              }}
+                              onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                              onKeyDown={(e) => handleCellKey(e, rowIndex, colIndex)}
+                              onBlur={(e) => saveCell(c.id, car.id, e.target.value)}
+                            />
+                            {link && (
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-amber hover:underline">
+                                open
+                              </a>
+                            )}
+                          </div>
                         </td>
                       );
                     })}

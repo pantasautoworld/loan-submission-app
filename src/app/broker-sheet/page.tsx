@@ -17,7 +17,14 @@ export default async function BrokerSheetPage() {
 
   const cars: AdminCar[] = (vehicles ?? [])
     .filter((v) => v && v.status !== "sold" && (v.vin || v.vehicle))
-    .map((v) => ({ id: v.id, plate: v.vin ?? "", vehicle: v.vehicle ?? "", status: v.status }))
+    .map((v) => ({
+      id: v.id,
+      plate: v.vin ?? "",
+      vehicle: v.vehicle ?? "",
+      status: v.status,
+      loan: v.price ?? "",
+      deposit: v.deposit ?? "",
+    }))
     .sort((a, b) => a.vehicle.localeCompare(b.vehicle));
 
   return (

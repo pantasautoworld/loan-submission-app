@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { BrokerSheetData } from "@/lib/brokerSheetShared";
+import { safeLink, type BrokerSheetData } from "@/lib/brokerSheetShared";
 
 const REFRESH_MS = 60_000;
 
@@ -10,6 +10,26 @@ function fmtCell(value: string, numeric: boolean): string {
   if (!numeric || value === "") return value || "—";
   const n = Number(value);
   return Number.isFinite(n) ? n.toLocaleString("en-MY", { maximumFractionDigits: 2 }) : value;
+}
+
+/** A cell's content: a tappable button for link columns, formatted text otherwise. */
+function CellValue({ value, column }: { value: string; column: { numeric: boolean; link: boolean } }) {
+  if (column.link) {
+    const href = safeLink(value);
+    return href ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-block rounded-[6px] border border-amber px-2 py-0.5 text-xs font-semibold text-amber hover:bg-amber hover:text-amber-fg"
+      >
+        Open
+      </a>
+    ) : (
+      <>—</>
+    );
+  }
+  return <>{fmtCell(value, column.numeric)}</>;
 }
 
 function fmtTime(iso: string): string {
@@ -86,12 +106,18 @@ export function BrokerStockView({
           <div className="grid gap-3 md:hidden">
             {rows.map((r, i) => (
               <div key={i} className="rounded-[10px] border border-line bg-panel p-3">
-                {first && <div className="mb-2 font-mono text-base font-bold text-fg">{fmtCell(r[0], first.numeric)}</div>}
+                {first && (
+                  <div className="mb-2 font-mono text-base font-bold text-fg">
+                    <CellValue value={r[0]} column={first} />
+                  </div>
+                )}
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                   {rest.map((c, j) => (
                     <div key={j} className="contents">
                       <dt className="text-muted">{c.label}</dt>
-                      <dd className={`text-fg ${c.numeric ? "font-mono" : ""}`}>{fmtCell(r[j + 1], c.numeric)}</dd>
+                      <dd className={`text-fg ${c.numeric ? "font-mono" : ""}`}>
+                        <CellValue value={r[j + 1]} column={c} />
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -116,7 +142,7 @@ export function BrokerStockView({
                   <tr key={i} className="border-t border-line bg-panel">
                     {sheet.columns.map((c, j) => (
                       <td key={j} className={`px-3 py-2 text-fg ${c.numeric ? "text-right font-mono" : ""} ${j === 0 ? "font-mono font-semibold" : ""}`}>
-                        {fmtCell(r[j], c.numeric)}
+                        <CellValue value={r[j]} column={c} />
                       </td>
                     ))}
                   </tr>

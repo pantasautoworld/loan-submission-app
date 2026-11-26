@@ -40,9 +40,17 @@ export const SUPPLIER_OPTIONS = ["CARSOME", "GMART", "SPANCO", "MYTUKAR"] as con
  * the Broker Sheet all work on this one only) and "cash" (Stock Board (Cash), for Sunshine Autoworld).
  */
 export type StockBoardId = "main" | "cash";
-export const STOCK_BOARDS: Record<StockBoardId, { title: string; path: string; companies: readonly string[] }> = {
-  main: { title: "Stock Board", path: "/stock-board", companies: COMPANY_OPTIONS },
-  cash: { title: "Stock Board (Cash)", path: "/stock-board-cash", companies: ["SUNSHINE"] },
+export const STOCK_BOARDS: Record<
+  StockBoardId,
+  { title: string; path: string; companies: readonly string[]; /** preset on a new car */ defaultCompany: string }
+> = {
+  main: { title: "Stock Board", path: "/stock-board", companies: COMPANY_OPTIONS, defaultCompany: "" },
+  cash: {
+    title: "Stock Board (Cash)",
+    path: "/stock-board-cash",
+    companies: ["SUNSHINE", ...COMPANY_OPTIONS],
+    defaultCompany: "SUNSHINE",
+  },
 };
 /** Anything that isn't exactly "cash" (e.g. a missing or tampered value) means the main board. */
 export const asStockBoardId = (value: unknown): StockBoardId => (value === "cash" ? "cash" : "main");

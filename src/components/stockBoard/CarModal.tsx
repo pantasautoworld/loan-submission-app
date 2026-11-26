@@ -57,8 +57,8 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
   const isCash = board === "cash";
   const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? (isCash ? "available" : "prep"));
   const [notes, setNotes] = useState(vehicle?.notes ?? "");
-  // a new car on a one-company board (Stock Board (Cash) = SUNSHINE) starts with that company
-  const [company, setCompany] = useState(vehicle?.company ?? (companies.length === 1 ? companies[0] : ""));
+  // a new car on Stock Board (Cash) starts as SUNSHINE (can be changed to KIWI / PANTAS)
+  const [company, setCompany] = useState(vehicle?.company ?? STOCK_BOARDS[board].defaultCompany);
   const [supplier, setSupplier] = useState(vehicle?.supplier ?? "");
   const [submittedBy, setSubmittedBy] = useState(vehicle?.submittedBy ?? "");
   const [submissionDate, setSubmissionDate] = useState(vehicle?.submissionDate ?? "");

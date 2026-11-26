@@ -19,6 +19,7 @@ import {
 import {
   BROKER_FIELDS,
   CUSTOM_FORMAT_LABEL,
+  isLinkFormat,
   STOCK_STATUSES,
   STOCK_STATUS_LABEL,
   safeLink,
@@ -36,6 +37,8 @@ export interface AdminCar {
   /** Stock Board figures, shown for reference next to your own columns. */
   loan: string;
   deposit: string;
+  /** The car's photo PDF from its LuluChat quick reply ("" if none) - used by "Car photos" columns left empty. */
+  pdf: string;
 }
 
 const fmtRef = (v: string) => {
@@ -512,7 +515,9 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
           <p className="mb-3 text-xs text-muted">
             Type a value and press Enter or click away to save (Enter moves down to the next car). To fill many at once, copy
             a column from Excel and paste it into the first car&apos;s cell. Showing cars in the statuses brokers see; sold
-            cars drop off automatically. Stock Board loan and deposit are shown in grey for reference.
+            cars drop off automatically. Stock Board loan and deposit are shown in grey for reference. A &quot;Car photos&quot;
+            column left empty gives brokers the car&apos;s PDF from its LuluChat quick reply (matched by the plate at the end
+            of the shortcut, refreshed hourly); type a link to use your own instead.
           </p>
           {pasteNote && <p className="mb-3 text-xs text-success">{pasteNote}</p>}
           <input
@@ -550,14 +555,19 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
                     {customColumns.map((c, colIndex) => {
                       const k = `${c.id}|${car.id}`;
                       const state = cellState[k];
-                      const link = c.format === "link" ? safeLink(cellValues[k] ?? "") : null;
+                      const own = cellValues[k] ?? "";
+                      const autoPdf = c.format === "photos" && !own.trim() ? car.pdf : "";
+                      const link = isLinkFormat(c.format) ? safeLink(own) ?? (autoPdf || null) : null;
                       return (
                         <td key={c.id} className="px-2 py-1">
                           <div className="flex items-center gap-1">
                             <input
                               data-cell={`${rowIndex}-${colIndex}`}
                               inputMode={c.format === "money" ? "decimal" : undefined}
-                              placeholder={c.format === "link" ? "https://…" : ""}
+                              placeholder={
+                                c.format === "photos" ? (car.pdf ? "LuluChat PDF ✓" : "no LuluChat PDF") : c.format === "link" ? "https://…" : ""
+                              }
+                              title={autoPdf ? "Brokers get the PDF from this car's LuluChat quick reply. Type a link to use your own instead." : undefined}
                               className={`${INPUT} w-full ${c.format === "money" ? "min-w-[100px] text-right font-mono" : "min-w-[140px]"} ${
                                 state === "error" ? "border-danger" : state === "saved" ? "border-success" : ""
                               }`}
@@ -577,7 +587,7 @@ export function BrokerSheetAdmin({ brokers, settings, columns, values, cars, sto
                             />
                             {link && (
                               <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-amber hover:underline">
-                                open
+                                {autoPdf ? "PDF" : "open"}
                               </a>
                             )}
                           </div>

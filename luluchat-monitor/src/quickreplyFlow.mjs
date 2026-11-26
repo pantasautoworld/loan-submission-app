@@ -8,7 +8,7 @@ import { INBOX_URL, SessionExpiredError, sleep } from "./scrape.mjs";
 const MORE_BUTTON = '[class*="messageTypeWrapper"] button:has(.anticon-more), [class*="messageTypeWrapper"] button:has(.anticon-ellipsis)';
 
 /** A chat row with no green unread badge (a bare-number line) and that isn't LuluChat's own notice chat. */
-async function openQuietArchivedChat(page) {
+export async function openQuietArchivedChat(page) {
   await page.goto(INBOX_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   const tab = page.getByRole("tab", { name: /^Archived/ }).first();
   try {
@@ -35,7 +35,7 @@ async function openQuietArchivedChat(page) {
 
 const manager = (page) => page.locator(".ant-modal-container").filter({ hasText: "Manage Quick Replies" }).first();
 
-async function openManager(page) {
+export async function openManager(page) {
   await page.locator(MORE_BUTTON).first().click();
   await page.getByText("Quick Replies", { exact: true }).first().click();
   await manager(page).getByRole("button", { name: "Create Quick Reply" }).waitFor({ state: "visible", timeout: 20_000 });

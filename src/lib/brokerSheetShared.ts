@@ -44,13 +44,30 @@ export const BROKER_FIELDS: Record<string, BrokerFieldDef> = {
   notes: { label: "Notes", numeric: false, internal: true, get: (v) => v.notes ?? "" },
 };
 
-/** How one of your own columns is shown: plain text, a money amount, or a link (e.g. a photo album). */
-export type CustomColumnFormat = "text" | "money" | "link";
+/**
+ * How one of your own columns is shown: plain text, a money amount, a link (e.g. a photo album), or car
+ * photos - a link that, when you leave it empty, is the car's PDF from its LuluChat quick reply.
+ */
+export type CustomColumnFormat = "text" | "money" | "link" | "photos";
 export const CUSTOM_FORMAT_LABEL: Record<CustomColumnFormat, string> = {
   text: "Text",
   money: "Money (RM)",
-  link: "Link (e.g. photos)",
+  link: "Link",
+  photos: "Car photos (LuluChat PDF auto)",
 };
+
+export const isLinkFormat = (format: CustomColumnFormat) => format === "link" || format === "photos";
+
+/** A plate reduced to letters and digits for matching: "wc1259q (fail)" -> "WC1259Q". */
+export function plateKey(plate: string): string {
+  return plate.toUpperCase().split("(")[0].replace(/[^A-Z0-9]/g, "");
+}
+
+/** The plate in a LuluChat quick reply shortcut "2017 Perodua Myvi G 1.3 Auto - VAL2925" -> "VAL2925" ("" if none). */
+export function plateFromShortcut(shortcut: string): string {
+  const i = shortcut.lastIndexOf(" - ");
+  return i < 0 ? "" : plateKey(shortcut.slice(i + 3));
+}
 
 export interface BrokerSheetColumn {
   id: string;
@@ -81,7 +98,7 @@ export function normalizeCustomValue(
     const n = Number(v.replace(/^rm\s*/i, "").replace(/,/g, "").trim());
     return Number.isFinite(n) ? { ok: true, value: String(n) } : { ok: false, error: `"${v}" is not an amount.` };
   }
-  if (format === "link") {
+  if (isLinkFormat(format)) {
     const url = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
     return safeLink(url) ? { ok: true, value: url } : { ok: false, error: `"${v}" is not a web link.` };
   }

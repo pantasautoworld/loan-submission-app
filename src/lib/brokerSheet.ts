@@ -1,9 +1,13 @@
 // SERVER ONLY. Builds the stock list that outside brokers see, and checks their personal links.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchStockBoardVehicles } from "@/lib/stockBoard";
+import type { StockBoardVehicle } from "@/lib/stockBoardShared";
 import {
   BROKER_FIELDS,
   STOCK_STATUSES,
+  isLinkFormat,
+  plateFromShortcut,
+  plateKey,
   type BrokerRow,
   type BrokerSheetColumn,
   type BrokerSheetData,
@@ -30,20 +34,45 @@ export async function loadBrokerSheetConfig(
   };
 }
 
+/**
+ * Plate -> link to the car's photo PDF in its LuluChat quick reply (copied in by the LuluChat robot).
+ * When a plate has more than one, the newest quick reply wins.
+ */
+export async function loadLuluchatPdfLinks(supabase: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from("luluchat_quick_reply_docs")
+    .select("shortcut, url")
+    .order("lc_created_at", { ascending: true, nullsFirst: true });
+  if (error) throw new Error(`LuluChat PDF links: ${error.message}`);
+  const links = new Map<string, string>();
+  for (const r of data ?? []) {
+    const plate = plateFromShortcut(r.shortcut);
+    if (plate) links.set(plate, r.url);
+  }
+  return links;
+}
+
 /** The broker view: cars in the chosen statuses, with only the visible columns, in order. */
 export async function buildBrokerSheet(supabase: SupabaseClient): Promise<BrokerSheetData> {
   const { settings, columns } = await loadBrokerSheetConfig(supabase);
   const shown = columns.filter((c) => c.visible && (c.kind === "custom" || (c.field && BROKER_FIELDS[c.field])));
   const customIds = shown.filter((c) => c.kind === "custom").map((c) => c.id);
+  const wantsPdfs = shown.some((c) => c.kind === "custom" && c.format === "photos");
 
-  const [vehicles, valuesRes] = await Promise.all([
+  const [vehicles, valuesRes, pdfLinks] = await Promise.all([
     fetchStockBoardVehicles(),
     customIds.length
       ? supabase.from("broker_sheet_values").select("column_id, vehicle_id, value").in("column_id", customIds)
       : Promise.resolve({ data: [] as { column_id: string; vehicle_id: string; value: string }[], error: null }),
+    // a missing PDF list must not take the whole sheet down
+    wantsPdfs ? loadLuluchatPdfLinks(supabase).catch(() => new Map<string, string>()) : new Map<string, string>(),
   ]);
   if (valuesRes.error) throw new Error(`Broker sheet values: ${valuesRes.error.message}`);
   const values = new Map((valuesRes.data ?? []).map((r) => [`${r.column_id}|${r.vehicle_id}`, r.value]));
+  const customValue = (c: BrokerSheetColumn, v: StockBoardVehicle) => {
+    const own = values.get(`${c.id}|${v.id}`) ?? "";
+    return own || (c.format === "photos" ? pdfLinks.get(plateKey(v.vin ?? "")) ?? "" : "");
+  };
 
   const statuses = new Set(settings.statuses.filter((s) => (STOCK_STATUSES as readonly string[]).includes(s)));
   const rows = vehicles
@@ -55,7 +84,7 @@ export async function buildBrokerSheet(supabase: SupabaseClient): Promise<Broker
     )
     .map((v) =>
       shown.map((c) =>
-        c.kind === "custom" ? values.get(`${c.id}|${v.id}`) ?? "" : BROKER_FIELDS[c.field!].get(v)
+        c.kind === "custom" ? customValue(c, v) : BROKER_FIELDS[c.field!].get(v)
       )
     );
 
@@ -64,7 +93,7 @@ export async function buildBrokerSheet(supabase: SupabaseClient): Promise<Broker
     columns: shown.map((c) => ({
       label: c.label,
       numeric: c.kind === "field" ? !!BROKER_FIELDS[c.field!]?.numeric : c.format === "money",
-      link: c.kind === "custom" && c.format === "link",
+      link: c.kind === "custom" && isLinkFormat(c.format),
     })),
     rows,
     generatedAt: new Date().toISOString(),

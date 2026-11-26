@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { COMPANY_OPTIONS, SUPPLIER_OPTIONS, type StockBoardVehicle } from "@/lib/stockBoardShared";
+import { STOCK_BOARDS, SUPPLIER_OPTIONS, type StockBoardId, type StockBoardVehicle } from "@/lib/stockBoardShared";
 import { deleteCarAction, listStockBoardVehiclesAction } from "@/app/stock-board/actions";
 import type { PuspakomStatusInfo } from "@/lib/puspakomBookings";
 import { RECON_LOCATIONS } from "@/lib/recon";
@@ -21,6 +21,8 @@ const STATUS_BG: Record<string, string> = {
 };
 
 interface Props {
+  /** Which board this is: the Stock Board ("main") or Stock Board (Cash) ("cash") - separate car lists. */
+  board?: StockBoardId;
   role: string;
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
@@ -83,6 +85,7 @@ const AGING_CLASS: Record<string, string> = {
 };
 
 export function StockBoardApp({
+  board = "main",
   role,
   staffNames,
   depositTotals,
@@ -110,10 +113,13 @@ export function StockBoardApp({
   // Cars whose photo request came back empty (no photo saved), so the card shows "No photo".
   const [missingPhotos, setMissingPhotos] = useState<Record<string, boolean>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const boardInfo = STOCK_BOARDS[board];
+  // Deposits, Puspakom and recon locations are tracked for the main Stock Board's cars only.
+  const loanExtras = board === "main";
 
   const load = useCallback(async () => {
     try {
-      const list = await listStockBoardVehiclesAction();
+      const list = await listStockBoardVehiclesAction(board);
       setVehicles(list);
       setError(null);
     } catch (err) {
@@ -121,10 +127,10 @@ export function StockBoardApp({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [board]);
 
   useEffect(() => {
-    listStockBoardVehiclesAction()
+    listStockBoardVehiclesAction(board)
       .then((list) => {
         setVehicles(list);
         setError(null);
@@ -134,7 +140,7 @@ export function StockBoardApp({
 
     const timer = setInterval(load, 8000);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [load, board]);
 
   const stats = useMemo(() => {
     const s = { prep: 0, available: 0, reserved: 0, sold: 0 };
@@ -150,9 +156,9 @@ export function StockBoardApp({
   }, [vehicles, staffNames]);
 
   const companyFilterOptions = useMemo(() => {
-    const extras = vehicles.map((v) => v.company).filter((c): c is string => !!c && !(COMPANY_OPTIONS as readonly string[]).includes(c));
-    return [...COMPANY_OPTIONS, ...Array.from(new Set(extras)).sort()];
-  }, [vehicles]);
+    const extras = vehicles.map((v) => v.company).filter((c): c is string => !!c && !boardInfo.companies.includes(c));
+    return [...boardInfo.companies, ...Array.from(new Set(extras)).sort()];
+  }, [vehicles, boardInfo]);
   const supplierFilterOptions = useMemo(() => {
     const extras = vehicles.map((v) => v.supplier).filter((c): c is string => !!c && !(SUPPLIER_OPTIONS as readonly string[]).includes(c));
     return [...SUPPLIER_OPTIONS, ...Array.from(new Set(extras)).sort()];
@@ -240,10 +246,10 @@ export function StockBoardApp({
   ]);
 
   async function handleDelete(v: StockBoardVehicle) {
-    if (!confirm(`Delete "${v.vehicle}" from the Stock Board?`)) return;
+    if (!confirm(`Delete "${v.vehicle}" from ${boardInfo.title}?`)) return;
     setDeletingId(v.id);
     try {
-      const result = await deleteCarAction(v.id);
+      const result = await deleteCarAction(v.id, board);
       if (!result.ok) throw new Error(result.error);
       await load();
     } catch (err) {
@@ -270,7 +276,7 @@ export function StockBoardApp({
     { label: "Deposit received", value: depositReceivedCount, key: "received", type: "deposit" as const },
     { label: "Loan submission", value: stats.prep, key: "prep", type: "status" as const },
     { label: "Sold", value: stats.sold, key: "sold", type: "status" as const },
-  ];
+  ].filter((s) => loanExtras || s.type !== "deposit");
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-5">
@@ -327,37 +333,41 @@ export function StockBoardApp({
           <option value="submittedBy">Sort: Staff submitted</option>
           <option value="company">Sort: Company</option>
         </select>
-        <select
-          value={depositFilter}
-          onChange={(e) => setDepositFilter(e.target.value as "" | "no_booking" | "received")}
-          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-        >
-          <option value="">All deposits</option>
-          <option value="no_booking">No booking</option>
-          <option value="received">Booking paid</option>
-        </select>
-        <select
-          value={puspakomFilter}
-          onChange={(e) => setPuspakomFilter(e.target.value as "" | "pending" | "done")}
-          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-        >
-          <option value="">All Puspakom</option>
-          <option value="pending">Pending Booking</option>
-          <option value="done">Booking Done</option>
-        </select>
-        <select
-          value={locationFilter}
-          onChange={(e) => setLocationFilter(e.target.value)}
-          className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
-        >
-          <option value="">All locations</option>
-          {RECON_LOCATIONS.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-          <option value="__none">No location set</option>
-        </select>
+        {loanExtras && (
+          <>
+            <select
+              value={depositFilter}
+              onChange={(e) => setDepositFilter(e.target.value as "" | "no_booking" | "received")}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            >
+              <option value="">All deposits</option>
+              <option value="no_booking">No booking</option>
+              <option value="received">Booking paid</option>
+            </select>
+            <select
+              value={puspakomFilter}
+              onChange={(e) => setPuspakomFilter(e.target.value as "" | "pending" | "done")}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            >
+              <option value="">All Puspakom</option>
+              <option value="pending">Pending Booking</option>
+              <option value="done">Booking Done</option>
+            </select>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="rounded-[7px] border border-line bg-panel-raised px-2 py-1.5 text-sm text-fg outline-none focus:border-amber"
+            >
+              <option value="">All locations</option>
+              {RECON_LOCATIONS.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+              <option value="__none">No location set</option>
+            </select>
+          </>
+        )}
         <select
           value={companyFilter}
           onChange={(e) => setCompanyFilter(e.target.value)}
@@ -405,7 +415,7 @@ export function StockBoardApp({
           {filtered.map((v) => {
             const photoSrc = missingPhotos[v.id]
               ? null
-              : `/api/stock-board/photo/${encodeURIComponent(v.id)}?v=${encodeURIComponent(v.updatedAt ?? v.addedAt ?? "")}`;
+              : `/api/stock-board/photo/${encodeURIComponent(v.id)}?v=${encodeURIComponent(v.updatedAt ?? v.addedAt ?? "")}${board === "main" ? "" : `&board=${board}`}`;
             const aging = v.status === "reserved" && v.approvalDate ? agingInfo(v.approvalDate) : null;
             const showSubmittedBy =
               (v.status === "prep" || v.status === "reserved" || v.status === "sold") && v.submittedBy;
@@ -568,6 +578,7 @@ export function StockBoardApp({
 
       {modalVehicle !== undefined && (
         <CarModal
+          board={board}
           vehicle={modalVehicle}
           staffNames={staffNames}
           onClose={() => setModalVehicle(undefined)}

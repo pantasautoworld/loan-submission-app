@@ -16,6 +16,7 @@ import { malaysiaTodayIso } from "@/lib/timezone";
 import {
   findByPlate,
   type ActivityLogEntry,
+  type StockBoardId,
   type SaveVehicleInput,
   type StockBoardVehicle,
 } from "@/lib/stockBoardShared";
@@ -27,13 +28,14 @@ export {
   findByPlate,
   splitVehicleYearAndModel,
 } from "@/lib/stockBoardShared";
-export type { ActivityLogEntry, SaveVehicleInput, StockBoardVehicle } from "@/lib/stockBoardShared";
+export type { ActivityLogEntry, SaveVehicleInput, StockBoardId, StockBoardVehicle } from "@/lib/stockBoardShared";
 
 const FIREBASE_DB_URL =
   "https://pantas-stock-board-default-rtdb.asia-southeast1.firebasedatabase.app";
-const FB_ROOT = "stockboard";
-const STOCK_LIST_PATH = `${FB_ROOT}/board-data/stockList`;
-const ACTIVITY_LOG_PATH = `${FB_ROOT}/board-data/activityLog`;
+/** Each board lives under its own root in the same database: nothing is shared between them. */
+const FB_ROOT: Record<StockBoardId, string> = { main: "stockboard", cash: "stockboard_cash" };
+const stockListPath = (board: StockBoardId) => `${FB_ROOT[board]}/board-data/stockList`;
+const activityLogPath = (board: StockBoardId) => `${FB_ROOT[board]}/board-data/activityLog`;
 
 // ---------- Firebase credentials ----------
 
@@ -94,30 +96,31 @@ async function fbUrl(path: string): Promise<string> {
 
 // ---------- Reads ----------
 
-let cache: { at: number; vehicles: StockBoardVehicle[] } | null = null;
+const cache: Partial<Record<StockBoardId, { at: number; vehicles: StockBoardVehicle[] }>> = {};
 const CACHE_MS = 60_000;
 
-export async function fetchStockBoardVehicles(): Promise<StockBoardVehicle[]> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.vehicles;
+export async function fetchStockBoardVehicles(board: StockBoardId = "main"): Promise<StockBoardVehicle[]> {
+  const cached = cache[board];
+  if (cached && Date.now() - cached.at < CACHE_MS) return cached.vehicles;
 
-  const res = await fetch(await fbUrl(STOCK_LIST_PATH), { cache: "no-store" });
+  const res = await fetch(await fbUrl(stockListPath(board)), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board fetch failed: ${res.status}`);
   const data: Record<string, Omit<StockBoardVehicle, "_key">> | null = await res.json();
   const vehicles = data
     ? Object.entries(data).map(([key, v]) => ({ ...v, _key: key }))
     : [];
-  cache = { at: Date.now(), vehicles };
+  cache[board] = { at: Date.now(), vehicles };
   return vehicles;
 }
 
 /** Bypasses the 60s cache - for the /stock-board page's own initial load and 8s poll, where staleness matters. */
-export async function refreshStockBoardVehicles(): Promise<StockBoardVehicle[]> {
-  cache = null;
-  return fetchStockBoardVehicles();
+export async function refreshStockBoardVehicles(board: StockBoardId = "main"): Promise<StockBoardVehicle[]> {
+  delete cache[board];
+  return fetchStockBoardVehicles(board);
 }
 
-export async function fetchActivityLog(): Promise<ActivityLogEntry[]> {
-  const res = await fetch(await fbUrl(ACTIVITY_LOG_PATH), { cache: "no-store" });
+export async function fetchActivityLog(board: StockBoardId = "main"): Promise<ActivityLogEntry[]> {
+  const res = await fetch(await fbUrl(activityLogPath(board)), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board activity log fetch failed: ${res.status}`);
   const data: ActivityLogEntry[] | null = await res.json();
   return data ?? [];
@@ -135,7 +138,7 @@ export async function markLoanSubmitted(
   vehicleKey: string,
   updatedBy: string
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const statusRes = await fetch(await fbUrl(`${STOCK_LIST_PATH}/${vehicleKey}/status`), { cache: "no-store" });
+  const statusRes = await fetch(await fbUrl(`${stockListPath("main")}/${vehicleKey}/status`), { cache: "no-store" });
   if (!statusRes.ok) return { ok: false, reason: "Could not reach the Stock Board" };
   const liveStatus = await statusRes.json();
 
@@ -143,7 +146,7 @@ export async function markLoanSubmitted(
     return { ok: false, reason: `Car is already marked "${liveStatus}" on the Stock Board` };
   }
 
-  const patchRes = await fetch(await fbUrl(`${STOCK_LIST_PATH}/${vehicleKey}`), {
+  const patchRes = await fetch(await fbUrl(`${stockListPath("main")}/${vehicleKey}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -154,7 +157,7 @@ export async function markLoanSubmitted(
   });
   if (!patchRes.ok) return { ok: false, reason: "Could not update the Stock Board" };
 
-  cache = null; // invalidate so the next lookup reflects the new status
+  delete cache.main; // invalidate so the next lookup reflects the new status
   return { ok: true };
 }
 
@@ -172,17 +175,18 @@ function stripKey(v: StockBoardVehicle): Omit<StockBoardVehicle, "_key"> {
 
 /** Writes the full stockList back and appends one activity entry - same shape as the standalone tool's saveBoardData(). */
 async function writeBoardData(
+  board: StockBoardId,
   stockList: Omit<StockBoardVehicle, "_key">[],
   activityAction: string,
   actorName: string
 ): Promise<void> {
-  const currentLog = await fetchActivityLog();
+  const currentLog = await fetchActivityLog(board);
   const activityLog = [
     { who: actorName, action: activityAction, at: new Date().toISOString() },
     ...currentLog,
   ].slice(0, 40);
 
-  const res = await fetch(await fbUrl(`${FB_ROOT}/board-data`), {
+  const res = await fetch(await fbUrl(`${FB_ROOT[board]}/board-data`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ stockList, activityLog }),
@@ -199,9 +203,10 @@ async function writeBoardData(
 export async function saveVehicle(
   input: SaveVehicleInput,
   editingId: string | null,
-  actorName: string
+  actorName: string,
+  board: StockBoardId = "main"
 ): Promise<string> {
-  const vehicles = await refreshStockBoardVehicles();
+  const vehicles = await refreshStockBoardVehicles(board);
   const now = new Date().toISOString();
 
   let savedId: string;
@@ -249,18 +254,18 @@ export async function saveVehicle(
     activityAction = `added ${input.vehicle}`;
   }
 
-  await writeBoardData(nextList, activityAction, actorName);
-  cache = null;
+  await writeBoardData(board, nextList, activityAction, actorName);
+  delete cache[board];
   return savedId;
 }
 
-export async function deleteVehicle(id: string, actorName: string): Promise<void> {
-  const vehicles = await refreshStockBoardVehicles();
+export async function deleteVehicle(id: string, actorName: string, board: StockBoardId = "main"): Promise<void> {
+  const vehicles = await refreshStockBoardVehicles(board);
   const target = vehicles.find((v) => v.id === id);
   const nextList = vehicles.filter((v) => v.id !== id).map(stripKey);
-  await writeBoardData(nextList, `deleted ${target?.vehicle ?? "a car"}`, actorName);
-  await deletePhoto(id).catch(() => {});
-  cache = null;
+  await writeBoardData(board, nextList, `deleted ${target?.vehicle ?? "a car"}`, actorName);
+  await deletePhoto(id, board).catch(() => {});
+  delete cache[board];
 }
 
 /**
@@ -294,25 +299,25 @@ export async function markLoanApproved(
     updatedAt: now,
   };
   const nextList = vehicles.map((v) => (v.id === match.id ? merged : stripKey(v)));
-  await writeBoardData(nextList, `approved ${match.vehicle} via Telegram`, actorName);
-  cache = null;
+  await writeBoardData("main", nextList, `approved ${match.vehicle} via Telegram`, actorName);
+  delete cache.main;
   return { ok: true, vehicle: { ...merged, _key: match._key } };
 }
 
 // ---------- Photos ----------
 
-function photoPath(id: string): string {
-  return `${FB_ROOT}/${encodeURIComponent("photo:" + id)}`;
+function photoPath(id: string, board: StockBoardId): string {
+  return `${FB_ROOT[board]}/${encodeURIComponent("photo:" + id)}`;
 }
 
-export async function fetchPhoto(id: string): Promise<string | null> {
-  const res = await fetch(await fbUrl(photoPath(id)), { cache: "no-store" });
+export async function fetchPhoto(id: string, board: StockBoardId = "main"): Promise<string | null> {
+  const res = await fetch(await fbUrl(photoPath(id, board)), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board photo fetch failed: ${res.status}`);
   return await res.json();
 }
 
-export async function setPhoto(id: string, dataUrl: string): Promise<void> {
-  const res = await fetch(await fbUrl(photoPath(id)), {
+export async function setPhoto(id: string, dataUrl: string, board: StockBoardId = "main"): Promise<void> {
+  const res = await fetch(await fbUrl(photoPath(id, board)), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(dataUrl),
@@ -320,7 +325,7 @@ export async function setPhoto(id: string, dataUrl: string): Promise<void> {
   if (!res.ok) throw new Error(`Stock Board photo save failed: ${res.status}`);
 }
 
-export async function deletePhoto(id: string): Promise<void> {
-  const res = await fetch(await fbUrl(photoPath(id)), { method: "DELETE" });
+export async function deletePhoto(id: string, board: StockBoardId = "main"): Promise<void> {
+  const res = await fetch(await fbUrl(photoPath(id, board)), { method: "DELETE" });
   if (!res.ok) throw new Error(`Stock Board photo delete failed: ${res.status}`);
 }

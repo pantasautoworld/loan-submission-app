@@ -67,6 +67,9 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
             <Link href="/stock-board" className="hover:text-amber">
               Stock Board
             </Link>
+            <Link href="/stock-board-cash" className="hover:text-amber">
+              Stock Board (Cash)
+            </Link>
             <Link href="/deposits" className="hover:text-amber">
               Deposit Payment
             </Link>

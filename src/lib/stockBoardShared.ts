@@ -34,6 +34,19 @@ export const COMPANY_OPTIONS = ["KIWI", "PANTAS"] as const;
 /** Where stock is sourced from. A car can still carry another supplier name (e.g. one-off ones) - the form keeps it as typed. */
 export const SUPPLIER_OPTIONS = ["CARSOME", "GMART", "SPANCO", "MYTUKAR"] as const;
 
+/**
+ * The app has two separate stock boards, each with its own car list, photos and activity log:
+ * "main" (the loan Stock Board - the loan wizard, Telegram approvals, deposits, Puspakom, recon and
+ * the Broker Sheet all work on this one only) and "cash" (Stock Board (Cash), for Sunshine Autoworld).
+ */
+export type StockBoardId = "main" | "cash";
+export const STOCK_BOARDS: Record<StockBoardId, { title: string; path: string; companies: readonly string[] }> = {
+  main: { title: "Stock Board", path: "/stock-board", companies: COMPANY_OPTIONS },
+  cash: { title: "Stock Board (Cash)", path: "/stock-board-cash", companies: ["SUNSHINE"] },
+};
+/** Anything that isn't exactly "cash" (e.g. a missing or tampered value) means the main board. */
+export const asStockBoardId = (value: unknown): StockBoardId => (value === "cash" ? "cash" : "main");
+
 export interface ActivityLogEntry {
   who: string;
   action: string;

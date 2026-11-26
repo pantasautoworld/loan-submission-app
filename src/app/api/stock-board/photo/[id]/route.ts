@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth";
 import { fetchPhoto } from "@/lib/stockBoard";
+import { asStockBoardId } from "@/lib/stockBoardShared";
 
 /**
  * GET /api/stock-board/photo/:id - a Stock Board car photo as an image, for staff only.
  * Firebase is locked down, so the browser can't read the photo (stored there as a data URL)
  * directly; serving it as a plain image also lets the board load all photos in parallel
- * and cache them. Add ?v=<updatedAt> so a re-saved car gets its new photo.
+ * and cache them. Add ?v=<updatedAt> so a re-saved car gets its new photo, and ?board=cash for a
+ * Stock Board (Cash) car.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
   const { id } = await params;
+  const board = asStockBoardId(new URL(request.url).searchParams.get("board"));
 
   let dataUrl: string | null;
   try {
-    dataUrl = await fetchPhoto(id);
+    dataUrl = await fetchPhoto(id, board);
   } catch {
     return new NextResponse("Stock Board unreachable", { status: 502 });
   }

@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { compressImage } from "@/lib/compressImage";
 import {
-  COMPANY_OPTIONS,
+  STOCK_BOARDS,
   SUPPLIER_OPTIONS,
   findById,
   type SaveVehicleInput,
+  type StockBoardId,
   type StockBoardVehicle,
 } from "@/lib/stockBoardShared";
 import {
@@ -30,6 +31,8 @@ const STATUS_OPTIONS: { value: StockBoardVehicle["status"]; label: string }[] = 
 ];
 
 interface Props {
+  /** The board the car is on (separate car lists). */
+  board?: StockBoardId;
   /** null = add a new car, a vehicle = edit it. */
   vehicle: StockBoardVehicle | null;
   staffNames: string[];
@@ -37,7 +40,8 @@ interface Props {
   onSaved: () => void;
 }
 
-export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
+export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved }: Props) {
+  const companies = STOCK_BOARDS[board].companies;
   const [vehicleText, setVehicleText] = useState(vehicle?.vehicle ?? "");
   const [vin, setVin] = useState(vehicle?.vin ?? "");
   const [price, setPrice] = useState(vehicle?.price ?? "");
@@ -46,7 +50,8 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
   const [tahun, setTahun] = useState(vehicle?.tahun ?? "");
   const [status, setStatus] = useState<StockBoardVehicle["status"]>(vehicle?.status ?? "prep");
   const [notes, setNotes] = useState(vehicle?.notes ?? "");
-  const [company, setCompany] = useState(vehicle?.company ?? "");
+  // a new car on a one-company board (Stock Board (Cash) = SUNSHINE) starts with that company
+  const [company, setCompany] = useState(vehicle?.company ?? (companies.length === 1 ? companies[0] : ""));
   const [supplier, setSupplier] = useState(vehicle?.supplier ?? "");
   const [submittedBy, setSubmittedBy] = useState(vehicle?.submittedBy ?? "");
   const [submissionDate, setSubmissionDate] = useState(vehicle?.submissionDate ?? "");
@@ -64,11 +69,11 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
 
   useEffect(() => {
     if (!vehicle) return;
-    fetchCarPhotoAction(vehicle.id)
+    fetchCarPhotoAction(vehicle.id, board)
       .then(setPhotoUrl)
       .catch(() => setPhotoUrl(null))
       .finally(() => setPhotoLoading(false));
-  }, [vehicle]);
+  }, [vehicle, board]);
 
   // The `vehicle` prop is a snapshot from the list's last poll (up to 8s stale, or
   // older still if this car changed - e.g. via the Telegram approval webhook - while
@@ -76,7 +81,7 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
   // clobber a field someone else just changed with what this snapshot still shows.
   useEffect(() => {
     if (!vehicle) return;
-    listStockBoardVehiclesAction()
+    listStockBoardVehiclesAction(board)
       .then((list) => {
         const fresh = findById(vehicle.id, list);
         if (!fresh) return;
@@ -96,7 +101,7 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
         setSoldDate(fresh.soldDate ?? "");
       })
       .catch(() => {}); // best-effort - fall back to the snapshot already shown
-  }, [vehicle]);
+  }, [vehicle, board]);
 
   function handleStatusChange(next: StockBoardVehicle["status"]) {
     setStatus(next);
@@ -154,14 +159,14 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
       if (status === "reserved") input.approvalDate = approvalDate;
       if (status === "sold") input.soldDate = soldDate;
 
-      const saved = await saveCarAction(input, vehicle?.id ?? null);
+      const saved = await saveCarAction(input, vehicle?.id ?? null, board);
       if (!saved.ok) throw new Error(saved.error);
       const savedId = saved.data;
 
       if (pendingPhotoAction === "set" && pendingPhotoData) {
-        await setCarPhotoAction(savedId, pendingPhotoData).catch(() => {});
+        await setCarPhotoAction(savedId, pendingPhotoData, board).catch(() => {});
       } else if (pendingPhotoAction === "remove") {
-        await deleteCarPhotoAction(savedId).catch(() => {});
+        await deleteCarPhotoAction(savedId, board).catch(() => {});
       }
 
       onSaved();
@@ -173,7 +178,7 @@ export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
 
   // Keep a car's current value selectable even if it isn't in the standard lists (older or one-off entries).
   const companyOptions: string[] =
-    company && !(COMPANY_OPTIONS as readonly string[]).includes(company) ? [company, ...COMPANY_OPTIONS] : [...COMPANY_OPTIONS];
+    company && !companies.includes(company) ? [company, ...companies] : [...companies];
   const supplierOptions: string[] =
     supplier && !(SUPPLIER_OPTIONS as readonly string[]).includes(supplier) ? [supplier, ...SUPPLIER_OPTIONS] : [...SUPPLIER_OPTIONS];
 

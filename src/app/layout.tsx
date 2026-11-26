@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Oswald, Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { ReloadOnNewVersion } from "@/components/ReloadOnNewVersion";
 
 const oswald = Oswald({
   variable: "--font-display",
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${oswald.variable} ${inter.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-bg text-fg font-sans">{children}</body>
+      <body className="min-h-full flex flex-col bg-bg text-fg font-sans">
+        <ReloadOnNewVersion />
+        {children}
+      </body>
     </html>
   );
 }

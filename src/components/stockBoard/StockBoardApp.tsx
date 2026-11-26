@@ -6,6 +6,7 @@ import { deleteCarAction, listStockBoardVehiclesAction } from "@/app/stock-board
 import type { PuspakomStatusInfo } from "@/lib/puspakomBookings";
 import { RECON_LOCATIONS } from "@/lib/recon";
 import { CarModal } from "./CarModal";
+import { reloadIfOutdated } from "@/lib/reloadOnNewVersion";
 
 const STATUS_LABEL: Record<string, string> = {
   prep: "Loan Submission",
@@ -126,6 +127,7 @@ export function StockBoardApp({
       setVehicles(list);
       setError(null);
     } catch (err) {
+      if (reloadIfOutdated(err)) return; // the app was updated since this page opened
       setError(err instanceof Error ? err.message : "Failed to load the Stock Board");
     } finally {
       setLoading(false);
@@ -138,7 +140,9 @@ export function StockBoardApp({
         setVehicles(list);
         setError(null);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load the Stock Board"))
+      .catch((err) => {
+        if (!reloadIfOutdated(err)) setError(err instanceof Error ? err.message : "Failed to load the Stock Board");
+      })
       .finally(() => setLoading(false));
 
     const timer = setInterval(load, 8000);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unstable_isUnrecognizedActionError } from "next/navigation";
 import { compressImage } from "@/lib/compressImage";
 import {
   STOCK_BOARDS,
@@ -178,7 +179,13 @@ export function CarModal({ board = "main", vehicle, staffNames, onClose, onSaved
 
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save - try again.");
+      setError(
+        unstable_isUnrecognizedActionError(err)
+          ? "The app was just updated. Copy anything you typed, press Ctrl+Shift+R to refresh, then save again."
+          : err instanceof Error
+            ? err.message
+            : "Could not save - try again."
+      );
       setIsSaving(false);
     }
   }

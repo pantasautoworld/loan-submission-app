@@ -403,6 +403,12 @@ export function StockBoardApp({
         </select>
         <div className="flex-1" />
         {error && <span className="text-xs text-danger">{error}</span>}
+        <a
+          href={`/api/stock-board/excel?board=${board}`}
+          className="rounded-[7px] border border-line bg-panel-raised px-4 py-2 text-sm font-semibold text-fg hover:border-amber"
+        >
+          Download Excel
+        </a>
         <button
           onClick={() => setModalVehicle(null)}
           className="rounded-[7px] bg-amber px-4 py-2 text-sm font-semibold text-amber-fg hover:brightness-110"

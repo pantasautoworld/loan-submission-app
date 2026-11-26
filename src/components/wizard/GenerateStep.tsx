@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { getSignedUrl } from "@/lib/storage";
-import { fetchStockBoardVehicles, findById, markLoanSubmitted } from "@/lib/stockBoard";
+import { markCarLoanSubmittedAction } from "@/app/stock-board/actions";
 import type { PersonRow, SignerRole } from "@/lib/types";
 
 interface Props {
@@ -47,10 +47,8 @@ export function GenerateStep({
 
       if (stockBoardVehicleId) {
         try {
-          const vehicles = await fetchStockBoardVehicles();
-          const vehicle = findById(stockBoardVehicleId, vehicles);
-          if (vehicle) {
-            const result = await markLoanSubmitted(vehicle._key, dealer.name);
+          const result = await markCarLoanSubmittedAction(stockBoardVehicleId, dealer.name);
+          if (result.ok || result.reason !== "Car not found on the Stock Board") {
             setBoardNotice(
               result.ok
                 ? "Stock Board updated: Available → Loan Submission."

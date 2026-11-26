@@ -94,6 +94,11 @@ export function TopNav({ staffName, role, breadcrumb = [] }: Props) {
               </Link>
             )}
             {role === "admin" && (
+              <Link href="/broker-sheet" className="hover:text-amber">
+                Broker Sheet
+              </Link>
+            )}
+            {role === "admin" && (
               <Link href="/staff" className="hover:text-amber">
                 Manage Staff
               </Link>

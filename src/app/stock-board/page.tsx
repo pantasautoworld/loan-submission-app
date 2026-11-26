@@ -24,15 +24,13 @@ export default async function StockBoardPage() {
     <>
       <TopNav staffName={profile.full_name} role={profile.role} breadcrumb={["Stock Board"]} />
       <StockBoardApp
-        staffName={profile.full_name}
         role={profile.role}
         staffNames={staffNames}
         depositTotals={depositTotals}
         forfeitedTotals={forfeitedTotals}
         puspakomStatusByVehicle={puspakomStatusByVehicle}
         locationByVehicle={locationByVehicle}
-        pendingTaskCounts={pendingTaskCounts}
-      />
+        pendingTaskCounts={pendingTaskCounts}      />
     </>
   );
 }

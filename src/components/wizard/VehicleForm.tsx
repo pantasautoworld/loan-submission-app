@@ -2,12 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { saveVehicle } from "@/app/submissions/[id]/edit/actions";
-import {
-  fetchStockBoardVehicles,
-  findByPlate,
-  splitVehicleYearAndModel,
-  type StockBoardVehicle,
-} from "@/lib/stockBoard";
+import { listStockBoardVehiclesAction } from "@/app/stock-board/actions";
+import { findByPlate, splitVehicleYearAndModel, type StockBoardVehicle } from "@/lib/stockBoardShared";
 import type { SubmissionRow } from "@/lib/types";
 
 const FIELD =
@@ -48,7 +44,7 @@ export function VehicleForm({
   const [boardLoading, setBoardLoading] = useState(true);
 
   useEffect(() => {
-    fetchStockBoardVehicles()
+    listStockBoardVehiclesAction()
       .then(setBoardVehicles)
       .catch((err) => setBoardError(err instanceof Error ? err.message : "Failed to load Stock Board"))
       .finally(() => setBoardLoading(false));

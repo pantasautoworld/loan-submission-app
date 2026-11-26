@@ -10,12 +10,8 @@ import {
 } from "@/app/submissions/[id]/edit/actions";
 import { uploadSubmissionFile } from "@/lib/storage";
 import { UploadBox } from "@/components/UploadBox";
-import {
-  fetchStockBoardVehicles,
-  findByPlate,
-  splitVehicleYearAndModel,
-  type StockBoardVehicle,
-} from "@/lib/stockBoard";
+import { listStockBoardVehiclesAction } from "@/app/stock-board/actions";
+import { findByPlate, splitVehicleYearAndModel, type StockBoardVehicle } from "@/lib/stockBoardShared";
 import type { DocType, DocumentRow, PersonRole } from "@/lib/types";
 
 interface VehicleFields {
@@ -145,7 +141,7 @@ export function DocumentsForm({
   const [boardLoading, setBoardLoading] = useState(true);
 
   useEffect(() => {
-    fetchStockBoardVehicles()
+    listStockBoardVehiclesAction()
       .then(setBoardVehicles)
       .catch((err) => setBoardError(err instanceof Error ? err.message : "Failed to load Stock Board"))
       .finally(() => setBoardLoading(false));
@@ -266,7 +262,7 @@ export function DocumentsForm({
           setPlateValue(plateNo);
           const vehicleFields: Partial<VehicleFields> = { no_plate: plateNo };
           try {
-            const freshBoardVehicles = await fetchStockBoardVehicles();
+            const freshBoardVehicles = await listStockBoardVehiclesAction();
             const match = findByPlate(plateNo, freshBoardVehicles);
             if (match) {
               const { yearMade, model } = splitVehicleYearAndModel(match.vehicle);

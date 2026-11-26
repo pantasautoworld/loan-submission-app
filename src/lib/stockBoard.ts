@@ -1,17 +1,33 @@
-// Read-write client for the existing "Stock Board" tool (ryansum.com/stock-board.html),
-// which is the real, actively-maintained vehicle inventory - Firebase Realtime Database,
-// not Supabase. This avoids staff double-entering cars in two systems: the loan app's
-// Vehicle step looks a plate up here instead of maintaining its own duplicate list, and
-// flips a car from "available" to "prep" (the Stock Board's own status value, which its
-// UI already labels "Loan Submission" - see STATUS_LABEL in its script) once a packet is
-// actually generated. Deliberately reusing their existing status rather than inventing a
-// new one: a value containing a space would break their `class="tag ${status}"` render.
+// SERVER ONLY. Read-write client for the "Stock Board" vehicle inventory - a Firebase Realtime
+// Database, not Supabase. The loan app's Vehicle step looks a plate up here instead of keeping
+// its own duplicate list, and flips a car from "available" to "prep" (the Stock Board's own
+// status value, labelled "Loan Submission" in the UI) once a packet is actually generated.
 //
-// The /stock-board page in this app is a second front end onto the exact same Firebase
-// data (board-data.stockList/activityLog, plus one photo:{id} key per car) - every read
-// and write here uses the same paths and record shape as the standalone tool's own script,
-// so cars added/edited from either place show up identically in both.
+// The database is locked down (rules deny all public reads/writes), so every request carries
+// the server's credentials: FIREBASE_SERVICE_ACCOUNT (the service-account JSON from Firebase
+// console > Project settings > Service accounts > Generate new private key, pasted as-is or
+// base64-encoded) or, as a fallback, FIREBASE_DB_SECRET (a legacy database secret). Browser
+// code must go through the server actions in src/app/stock-board/actions.ts instead.
+//
+// The data shape (board-data.stockList/activityLog, plus one photo:{id} key per car) matches
+// the original standalone Stock Board tool's script, so records stay compatible.
+import { createSign } from "node:crypto";
 import { malaysiaTodayIso } from "@/lib/timezone";
+import {
+  findByPlate,
+  type ActivityLogEntry,
+  type SaveVehicleInput,
+  type StockBoardVehicle,
+} from "@/lib/stockBoardShared";
+
+export {
+  COMPANY_OPTIONS,
+  SUPPLIER_OPTIONS,
+  findById,
+  findByPlate,
+  splitVehicleYearAndModel,
+} from "@/lib/stockBoardShared";
+export type { ActivityLogEntry, SaveVehicleInput, StockBoardVehicle } from "@/lib/stockBoardShared";
 
 const FIREBASE_DB_URL =
   "https://pantas-stock-board-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -19,61 +35,64 @@ const FB_ROOT = "stockboard";
 const STOCK_LIST_PATH = `${FB_ROOT}/board-data/stockList`;
 const ACTIVITY_LOG_PATH = `${FB_ROOT}/board-data/activityLog`;
 
-export interface StockBoardVehicle {
-  id: string;
-  vin: string; // actually holds the plate number, e.g. "WWT7595"
-  vehicle: string; // e.g. "2012 PERODUA ALZA 1.5 EZI AUTO"
-  price: string; // finance loan amount
-  tahun: string; // tenure in years, e.g. "7"
-  status: "available" | "reserved" | "sold" | "prep" | string;
-  notes: string;
-  cost: string;
-  deposit: string;
-  /** Which of our companies owns this car - one of COMPANY_OPTIONS (KIWI / PANTAS). Shown next to the status tag. */
-  company?: string;
-  /** Where the car was sourced from - normally one of SUPPLIER_OPTIONS (CARSOME, GMART, ...). */
-  supplier?: string;
-  addedBy?: string;
-  addedAt?: string;
-  updatedBy?: string;
-  updatedAt?: string;
-  submittedBy?: string;
-  submissionDate?: string;
-  approvalDate?: string;
-  soldDate?: string;
-  /** Firebase's array key for this record (e.g. "5") - needed to write back to it. */
-  _key: string;
+// ---------- Firebase credentials ----------
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+
+function readServiceAccount(): { client_email: string; private_key: string; token_uri?: string } | null {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+  if (!raw) return null;
+  const json = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+  const parsed = JSON.parse(json);
+  if (!parsed.client_email || !parsed.private_key) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT is missing client_email or private_key.");
+  }
+  return { ...parsed, private_key: String(parsed.private_key).replace(/\\n/g, "\n") };
 }
 
-/** The two companies that own stock. */
-export const COMPANY_OPTIONS = ["KIWI", "PANTAS"] as const;
+/** OAuth2 access token for the service account (JWT bearer grant), cached until shortly before it expires. */
+async function serviceAccountToken(sa: { client_email: string; private_key: string; token_uri?: string }): Promise<string> {
+  if (tokenCache && tokenCache.expiresAt - 5 * 60_000 > Date.now()) return tokenCache.token;
 
-/** Where stock is sourced from. A car can still carry another supplier name (e.g. one-off ones) - the form keeps it as typed. */
-export const SUPPLIER_OPTIONS = ["CARSOME", "GMART", "SPANCO", "MYTUKAR"] as const;
+  const tokenUri = sa.token_uri || "https://oauth2.googleapis.com/token";
+  const now = Math.floor(Date.now() / 1000);
+  const b64url = (s: string) => Buffer.from(s).toString("base64url");
+  const unsigned = `${b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${b64url(
+    JSON.stringify({
+      iss: sa.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+      aud: tokenUri,
+      iat: now,
+      exp: now + 3600,
+    })
+  )}`;
+  const signature = createSign("RSA-SHA256").update(unsigned).sign(sa.private_key, "base64url");
 
-export interface ActivityLogEntry {
-  who: string;
-  action: string;
-  at: string;
+  const res = await fetch(tokenUri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: `${unsigned}.${signature}`,
+    }),
+  });
+  if (!res.ok) throw new Error(`Stock Board sign-in failed: ${res.status}`);
+  const data: { access_token: string; expires_in: number } = await res.json();
+  tokenCache = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return data.access_token;
 }
 
-/** Fields the Add/Edit Car form collects - mirrors the standalone tool's own saveCar(). */
-export interface SaveVehicleInput {
-  vehicle: string;
-  vin: string;
-  price: string;
-  cost: string;
-  deposit: string;
-  tahun: string;
-  status: StockBoardVehicle["status"];
-  notes: string;
-  company: string;
-  supplier: string;
-  submittedBy?: string;
-  submissionDate?: string;
-  approvalDate?: string;
-  soldDate?: string;
+/** Full REST URL for a database path, with the server's credentials attached. */
+async function fbUrl(path: string): Promise<string> {
+  const url = `${FIREBASE_DB_URL}/${path}.json`;
+  const sa = readServiceAccount();
+  if (sa) return `${url}?access_token=${encodeURIComponent(await serviceAccountToken(sa))}`;
+  const secret = process.env.FIREBASE_DB_SECRET?.trim();
+  if (secret) return `${url}?auth=${encodeURIComponent(secret)}`;
+  return url; // no credentials configured: only works while the database rules are still open
 }
+
+// ---------- Reads ----------
 
 let cache: { at: number; vehicles: StockBoardVehicle[] } | null = null;
 const CACHE_MS = 60_000;
@@ -81,7 +100,7 @@ const CACHE_MS = 60_000;
 export async function fetchStockBoardVehicles(): Promise<StockBoardVehicle[]> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.vehicles;
 
-  const res = await fetch(`${FIREBASE_DB_URL}/${STOCK_LIST_PATH}.json`);
+  const res = await fetch(await fbUrl(STOCK_LIST_PATH), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board fetch failed: ${res.status}`);
   const data: Record<string, Omit<StockBoardVehicle, "_key">> | null = await res.json();
   const vehicles = data
@@ -98,40 +117,13 @@ export async function refreshStockBoardVehicles(): Promise<StockBoardVehicle[]> 
 }
 
 export async function fetchActivityLog(): Promise<ActivityLogEntry[]> {
-  const res = await fetch(`${FIREBASE_DB_URL}/${ACTIVITY_LOG_PATH}.json`);
+  const res = await fetch(await fbUrl(ACTIVITY_LOG_PATH), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board activity log fetch failed: ${res.status}`);
   const data: ActivityLogEntry[] | null = await res.json();
   return data ?? [];
 }
 
-export function findByPlate(
-  plate: string,
-  vehicles: StockBoardVehicle[]
-): StockBoardVehicle | undefined {
-  const normalized = plate.trim().toUpperCase().replace(/\s+/g, "");
-  return vehicles.find((v) => (v.vin ?? "").toUpperCase().replace(/\s+/g, "") === normalized);
-}
-
-export function findById(
-  id: string,
-  vehicles: StockBoardVehicle[]
-): StockBoardVehicle | undefined {
-  return vehicles.find((v) => v.id === id);
-}
-
-/**
- * The Stock Board's `vehicle` field leads with the model year, e.g.
- * "2015 NISSAN ALMERA VL 1.5 AT" - split that into Year Made and the
- * remaining model description.
- */
-export function splitVehicleYearAndModel(vehicle: string): {
-  yearMade: number | null;
-  model: string;
-} {
-  const match = (vehicle ?? "").trim().match(/^(\d{4})\s+(.*)$/);
-  if (!match) return { yearMade: null, model: (vehicle ?? "").trim() };
-  return { yearMade: Number(match[1]), model: match[2] };
-}
+// ---------- Writes ----------
 
 /**
  * Flips a car's status on the Stock Board once a loan packet is actually
@@ -143,7 +135,7 @@ export async function markLoanSubmitted(
   vehicleKey: string,
   updatedBy: string
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const statusRes = await fetch(`${FIREBASE_DB_URL}/${STOCK_LIST_PATH}/${vehicleKey}/status.json`);
+  const statusRes = await fetch(await fbUrl(`${STOCK_LIST_PATH}/${vehicleKey}/status`), { cache: "no-store" });
   if (!statusRes.ok) return { ok: false, reason: "Could not reach the Stock Board" };
   const liveStatus = await statusRes.json();
 
@@ -151,7 +143,7 @@ export async function markLoanSubmitted(
     return { ok: false, reason: `Car is already marked "${liveStatus}" on the Stock Board` };
   }
 
-  const patchRes = await fetch(`${FIREBASE_DB_URL}/${STOCK_LIST_PATH}/${vehicleKey}.json`, {
+  const patchRes = await fetch(await fbUrl(`${STOCK_LIST_PATH}/${vehicleKey}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -190,7 +182,7 @@ async function writeBoardData(
     ...currentLog,
   ].slice(0, 40);
 
-  const res = await fetch(`${FIREBASE_DB_URL}/${FB_ROOT}/board-data.json`, {
+  const res = await fetch(await fbUrl(`${FB_ROOT}/board-data`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ stockList, activityLog }),
@@ -307,18 +299,20 @@ export async function markLoanApproved(
   return { ok: true, vehicle: { ...merged, _key: match._key } };
 }
 
-function photoUrl(id: string): string {
-  return `${FIREBASE_DB_URL}/${FB_ROOT}/${encodeURIComponent("photo:" + id)}.json`;
+// ---------- Photos ----------
+
+function photoPath(id: string): string {
+  return `${FB_ROOT}/${encodeURIComponent("photo:" + id)}`;
 }
 
 export async function fetchPhoto(id: string): Promise<string | null> {
-  const res = await fetch(photoUrl(id));
+  const res = await fetch(await fbUrl(photoPath(id)), { cache: "no-store" });
   if (!res.ok) throw new Error(`Stock Board photo fetch failed: ${res.status}`);
   return await res.json();
 }
 
 export async function setPhoto(id: string, dataUrl: string): Promise<void> {
-  const res = await fetch(photoUrl(id), {
+  const res = await fetch(await fbUrl(photoPath(id)), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(dataUrl),
@@ -327,6 +321,6 @@ export async function setPhoto(id: string, dataUrl: string): Promise<void> {
 }
 
 export async function deletePhoto(id: string): Promise<void> {
-  const res = await fetch(photoUrl(id), { method: "DELETE" });
+  const res = await fetch(await fbUrl(photoPath(id)), { method: "DELETE" });
   if (!res.ok) throw new Error(`Stock Board photo delete failed: ${res.status}`);
 }

@@ -5,15 +5,17 @@ import { compressImage } from "@/lib/compressImage";
 import {
   COMPANY_OPTIONS,
   SUPPLIER_OPTIONS,
-  deletePhoto,
-  fetchPhoto,
   findById,
-  refreshStockBoardVehicles,
-  saveVehicle,
-  setPhoto,
   type SaveVehicleInput,
   type StockBoardVehicle,
-} from "@/lib/stockBoard";
+} from "@/lib/stockBoardShared";
+import {
+  deleteCarPhotoAction,
+  fetchCarPhotoAction,
+  listStockBoardVehiclesAction,
+  saveCarAction,
+  setCarPhotoAction,
+} from "@/app/stock-board/actions";
 import { malaysiaTodayIso } from "@/lib/timezone";
 
 const FIELD =
@@ -31,12 +33,11 @@ interface Props {
   /** null = add a new car, a vehicle = edit it. */
   vehicle: StockBoardVehicle | null;
   staffNames: string[];
-  actorName: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: Props) {
+export function CarModal({ vehicle, staffNames, onClose, onSaved }: Props) {
   const [vehicleText, setVehicleText] = useState(vehicle?.vehicle ?? "");
   const [vin, setVin] = useState(vehicle?.vin ?? "");
   const [price, setPrice] = useState(vehicle?.price ?? "");
@@ -63,7 +64,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
 
   useEffect(() => {
     if (!vehicle) return;
-    fetchPhoto(vehicle.id)
+    fetchCarPhotoAction(vehicle.id)
       .then(setPhotoUrl)
       .catch(() => setPhotoUrl(null))
       .finally(() => setPhotoLoading(false));
@@ -75,7 +76,7 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
   // clobber a field someone else just changed with what this snapshot still shows.
   useEffect(() => {
     if (!vehicle) return;
-    refreshStockBoardVehicles()
+    listStockBoardVehiclesAction()
       .then((list) => {
         const fresh = findById(vehicle.id, list);
         if (!fresh) return;
@@ -153,12 +154,14 @@ export function CarModal({ vehicle, staffNames, actorName, onClose, onSaved }: P
       if (status === "reserved") input.approvalDate = approvalDate;
       if (status === "sold") input.soldDate = soldDate;
 
-      const savedId = await saveVehicle(input, vehicle?.id ?? null, actorName);
+      const saved = await saveCarAction(input, vehicle?.id ?? null);
+      if (!saved.ok) throw new Error(saved.error);
+      const savedId = saved.data;
 
       if (pendingPhotoAction === "set" && pendingPhotoData) {
-        await setPhoto(savedId, pendingPhotoData).catch(() => {});
+        await setCarPhotoAction(savedId, pendingPhotoData).catch(() => {});
       } else if (pendingPhotoAction === "remove") {
-        await deletePhoto(savedId).catch(() => {});
+        await deleteCarPhotoAction(savedId).catch(() => {});
       }
 
       onSaved();

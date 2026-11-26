@@ -1,14 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  COMPANY_OPTIONS,
-  SUPPLIER_OPTIONS,
-  deleteVehicle,
-  fetchPhoto,
-  refreshStockBoardVehicles,
-  type StockBoardVehicle,
-} from "@/lib/stockBoard";
+import { COMPANY_OPTIONS, SUPPLIER_OPTIONS, type StockBoardVehicle } from "@/lib/stockBoardShared";
+import { deleteCarAction, listStockBoardVehiclesAction } from "@/app/stock-board/actions";
 import type { PuspakomStatusInfo } from "@/lib/puspakomBookings";
 import { RECON_LOCATIONS } from "@/lib/recon";
 import { CarModal } from "./CarModal";
@@ -27,7 +21,6 @@ const STATUS_BG: Record<string, string> = {
 };
 
 interface Props {
-  staffName: string;
   role: string;
   staffNames: string[];
   /** Sum of approved deposit payments per car, keyed by Stock Board vehicle id. */
@@ -90,7 +83,6 @@ const AGING_CLASS: Record<string, string> = {
 };
 
 export function StockBoardApp({
-  staffName,
   role,
   staffNames,
   depositTotals,
@@ -115,12 +107,13 @@ export function StockBoardApp({
   const [sortBy, setSortBy] = useState<"recent" | "submittedBy" | "company">("recent");
   // undefined = modal closed, null = add mode, a vehicle = edit mode
   const [modalVehicle, setModalVehicle] = useState<StockBoardVehicle | null | undefined>(undefined);
-  const [photoCache, setPhotoCache] = useState<Record<string, string | null>>({});
+  // Cars whose photo request came back empty (no photo saved), so the card shows "No photo".
+  const [missingPhotos, setMissingPhotos] = useState<Record<string, boolean>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const list = await refreshStockBoardVehicles();
+      const list = await listStockBoardVehiclesAction();
       setVehicles(list);
       setError(null);
     } catch (err) {
@@ -131,7 +124,7 @@ export function StockBoardApp({
   }, []);
 
   useEffect(() => {
-    refreshStockBoardVehicles()
+    listStockBoardVehiclesAction()
       .then((list) => {
         setVehicles(list);
         setError(null);
@@ -142,17 +135,6 @@ export function StockBoardApp({
     const timer = setInterval(load, 8000);
     return () => clearInterval(timer);
   }, [load]);
-
-  useEffect(() => {
-    vehicles.forEach((v) => {
-      if (photoCache[v.id] !== undefined) return;
-      fetchPhoto(v.id)
-        .then((url) => setPhotoCache((c) => ({ ...c, [v.id]: url })))
-        .catch(() => setPhotoCache((c) => ({ ...c, [v.id]: null })));
-    });
-    // photoCache intentionally excluded - it's the read cache being filled here, not a trigger
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicles]);
 
   const stats = useMemo(() => {
     const s = { prep: 0, available: 0, reserved: 0, sold: 0 };
@@ -261,7 +243,8 @@ export function StockBoardApp({
     if (!confirm(`Delete "${v.vehicle}" from the Stock Board?`)) return;
     setDeletingId(v.id);
     try {
-      await deleteVehicle(v.id, staffName);
+      const result = await deleteCarAction(v.id);
+      if (!result.ok) throw new Error(result.error);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not delete - try again.");
@@ -420,7 +403,9 @@ export function StockBoardApp({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((v) => {
-            const photo = photoCache[v.id];
+            const photoSrc = missingPhotos[v.id]
+              ? null
+              : `/api/stock-board/photo/${encodeURIComponent(v.id)}?v=${encodeURIComponent(v.updatedAt ?? v.addedAt ?? "")}`;
             const aging = v.status === "reserved" && v.approvalDate ? agingInfo(v.approvalDate) : null;
             const showSubmittedBy =
               (v.status === "prep" || v.status === "reserved" || v.status === "sold") && v.submittedBy;
@@ -434,11 +419,17 @@ export function StockBoardApp({
             return (
               <div key={v.id} className="flex flex-col overflow-hidden rounded-[10px] border border-line bg-panel">
                 <div className="flex aspect-[4/3] items-center justify-center overflow-hidden border-b border-line bg-panel-raised">
-                  {photo ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- data-URL photo from Firebase, not a static asset
-                    <img src={photo} alt={v.vehicle} className="h-full w-full object-cover" />
+                  {photoSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- photo served from Firebase via our own route, not a static asset
+                    <img
+                      src={photoSrc}
+                      alt={v.vehicle}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                      onError={() => setMissingPhotos((m) => ({ ...m, [v.id]: true }))}
+                    />
                   ) : (
-                    <span className="text-xs text-muted">{photo === null ? "No photo" : "Loading…"}</span>
+                    <span className="text-xs text-muted">No photo</span>
                   )}
                 </div>
                 <div className="flex flex-1 flex-col p-4">
@@ -579,10 +570,10 @@ export function StockBoardApp({
         <CarModal
           vehicle={modalVehicle}
           staffNames={staffNames}
-          actorName={staffName}
           onClose={() => setModalVehicle(undefined)}
           onSaved={() => {
             setModalVehicle(undefined);
+            setMissingPhotos({}); // a photo may have just been added
             load();
           }}
         />
